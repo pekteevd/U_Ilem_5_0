@@ -13,7 +13,7 @@ export class WorldRenderer{
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;
     this.raycaster=new THREE.Raycaster();this.pointer=new THREE.Vector2();
     this.pickables=[];this.objectGroups=new Map();this.characterGroups=new Map();this.target=new THREE.Vector3(0,0,0);
-    this.drag=null;this.mapAspect=1;this.mapWidth=WORLD_MAP_CONFIG.worldWidth;this.mapHeight=this.mapWidth;this.flameEffects=[];
+    this.drag=null;this.mapAspect=1;this.mapWidth=WORLD_MAP_CONFIG.worldWidth;this.mapHeight=this.mapWidth;this.mapReady=false;this.pendingObjects=[];this.pendingCharacters=null;this.flameEffects=[];
     this.addLights();this.loadMap();this.bindControls();this.resize();
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(viewport);
     this.animate=this.animate.bind(this);requestAnimationFrame(this.animate);
@@ -32,7 +32,15 @@ export class WorldRenderer{
       const geometry=new THREE.PlaneGeometry(this.mapWidth,this.mapHeight);
       const material=new THREE.MeshBasicMaterial({map:texture});
       const plane=new THREE.Mesh(geometry,material);plane.rotation.x=-Math.PI/2;plane.position.y=-.12;plane.receiveShadow=true;plane.userData.isMap=true;
-      this.scene.add(plane);this.fitCamera();document.getElementById("map-loading")?.classList.add("hidden");
+      this.scene.add(plane);this.fitCamera();this.mapReady=true;
+      const pendingObjects=this.pendingObjects.splice(0);
+      pendingObjects.forEach(object=>this.addObject(object));
+      if(this.pendingCharacters){
+        const [characters,tasks,objects]=this.pendingCharacters;
+        this.pendingCharacters=null;
+        this.syncCharacters(characters,tasks,objects);
+      }
+      document.getElementById("map-loading")?.classList.add("hidden");
       this.onReady?.({width:image.width,height:image.height,aspect:this.mapAspect,worldWidth:this.mapWidth,worldHeight:this.mapHeight,source:WORLD_MAP_CONFIG.file});
     },undefined,error=>{
       const el=document.getElementById("map-loading");if(el)el.textContent="Не удалось загрузить утверждённую карту. Проверь наличие PNG рядом с index.html.";
@@ -368,12 +376,14 @@ export class WorldRenderer{
     marker.position.set(0,.09,0);marker.userData.objectId=o.id;group.add(marker);
   }
   addObject(object){
+    if(!this.mapReady){this.pendingObjects.push(object);return;}
     const group=new THREE.Group();group.position.copy(this.mapPoint(object.position));group.userData.objectId=object.id;
     this.buildModel(group,object);this.scene.add(group);this.objectGroups.set(object.id,group);
     group.traverse(node=>{if(node.isMesh){node.userData.objectId=object.id;this.pickables.push(node);node.castShadow=true;node.receiveShadow=true;}});
   }
   addObjects(objects){objects.forEach(o=>this.addObject(o));}
   syncCharacters(characters,tasks,objects){
+    if(!this.mapReady){this.pendingCharacters=[characters,tasks,objects];return;}
     for(const group of this.characterGroups?.values?.()||[])this.scene.remove(group);
     this.characterGroups=new Map();
     const active=(tasks||[]).filter(t=>t.status==="in_progress"&&t.ownerId&&t.objectId);
