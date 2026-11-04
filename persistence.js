@@ -37,15 +37,31 @@ export async function loadState(){
   return {state:null,source:"new"};
 }
 
+function storeLocalSnapshot(state,savedAt){
+  try{
+    localStorage.setItem(LOCAL_KEY,JSON.stringify({state,savedAt}));
+    return {local:true,savedAt};
+  }catch(error){
+    console.warn("Local save failed:",error);
+    return {local:false,savedAt,error:error.message};
+  }
+}
+
+export function saveLocalSnapshot(state){
+  if(saveConflict)return {ok:false,local:false,conflict:true,error:"stale_save_rejected"};
+  if(!valid(state))return {ok:false,local:false,error:"invalid_state_schema"};
+  const savedAt=new Date().toISOString();
+  if(state.meta)state.meta.lastSavedAt=savedAt;
+  return {ok:storeLocalSnapshot(state,savedAt).local,local:storeLocalSnapshot(state,savedAt).local,savedAt};
+}
+
 export async function saveState(state){
   if(saveConflict)return {ok:false,server:false,local:false,conflict:true,error:"stale_save_rejected"};
   if(!valid(state))return {ok:false,server:false,local:false,error:"invalid_state_schema"};
   const savedAt=new Date().toISOString();
   if(state.meta)state.meta.lastSavedAt=savedAt;
   const snapshot=JSON.stringify(state);
-  let local=false;
-  try{localStorage.setItem(LOCAL_KEY,JSON.stringify({state,savedAt}));local=true;}
-  catch(error){console.warn("Local save failed:",error);}
+  const local=storeLocalSnapshot(state,savedAt).local;
   const request=saveQueue.catch(()=>{}).then(async()=>{
     const response=await fetch("/api/save",{method:"POST",headers:{"Content-Type":"application/json"},body:snapshot});
     if(!response.ok){
