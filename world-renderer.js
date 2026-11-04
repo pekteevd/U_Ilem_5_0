@@ -160,6 +160,27 @@ export class WorldRenderer{
     }
   }
 
+  addFacadeBattens(parent,w,h,z,material,spacing=.82){
+    const count=Math.max(3,Math.floor(w/spacing));
+    for(let i=0;i<=count;i++){
+      const x=-w/2+(w/count)*i;
+      this.box(parent,.055,h*.94,.075,material,x,h*.5,z);
+    }
+    this.box(parent,w+.12,.12,.1,material,0,h*.96,z);
+    this.box(parent,w+.12,.12,.1,material,0,h*.04,z);
+  }
+  addRoofRibs(parent,w,d,eaveY,rise,material,overhang=.5){
+    const half=(w+overhang*2)/2,depth=d+overhang*2;
+    const angle=Math.atan2(rise,half),length=Math.hypot(half,rise);
+    const count=Math.max(5,Math.floor(d/1.15));
+    for(let i=0;i<=count;i++){
+      const z=-depth/2+(depth/count)*i;
+      const left=this.box(parent,length,.075,.09,material,-half/2,eaveY+rise/2,z);
+      left.rotation.z=angle;
+      const right=this.box(parent,length,.075,.09,material,half/2,eaveY+rise/2,z);
+      right.rotation.z=-angle;
+    }
+  }
   buildHouse(group,o,wood,darkWood,roof,stone,glass,warm){
     const {w,d,h}=o.dimensions,baseH=.42,wallH=h*.66,eaveY=baseH+wallH;
     this.box(group,w+.56,baseH,d+.56,stone,0,baseH/2,0);
@@ -171,14 +192,28 @@ export class WorldRenderer{
     }
     this.gableFace(group,w,wallH*.34,d/2+.045,wood,eaveY);
     this.gableFace(group,w,wallH*.34,-d/2-.045,wood,eaveY);
-    const frontZ=d/2+.09;
+    const frontZ=d/2+.09,backZ=-d/2-.09,sideX=w/2+.055;
+    const siding=this.material(0x795a3c),trim=this.material(0x4d3929);
+    this.addFacadeBattens(group,w,wallH,frontZ,siding,.78);
+    this.addFacadeBattens(group,w,wallH,backZ,siding,.78);
+    for(const x of [-sideX,sideX]){
+      for(let z=-d/2+.18;z<=d/2-.1;z+=.78)this.box(group,.075,wallH*.94,.055, siding,x,baseH+wallH/2,z);
+      this.box(group,.11,.12,d+.12,trim,x,baseH+wallH*.96,0);
+    }
+    for(const x of [-w/2,w/2])for(const z of [-d/2,d/2])this.box(group,.16,wallH+.2,.16,trim,x,baseH+wallH/2,z);
+    const frontZ=d/2+.15;
     this.addWindow(group,-w*.29,baseH+wallH*.57,frontZ,w*.19,wallH*.27,darkWood,glass);
     this.addWindow(group,w*.29,baseH+wallH*.57,frontZ,w*.19,wallH*.27,darkWood,glass);
     this.addWindow(group,-w*.29,baseH+wallH*.57,-frontZ,w*.19,wallH*.27,darkWood,glass);
     this.addWindow(group,w*.29,baseH+wallH*.57,-frontZ,w*.19,wallH*.27,darkWood,glass);
     this.box(group,w*.21,wallH*.66,.16,darkWood,0,baseH+wallH*.33,frontZ+.035);
+    this.box(group,w*.18,.08,.07,wood,0,baseH+wallH*.66,frontZ+.12);
+    this.box(group,w*.18,.08,.07,wood,0,baseH,frontZ+.12);
+    this.box(group,.07,wallH*.66,.07,wood,-w*.105,baseH+wallH*.33,frontZ+.12);
+    this.box(group,.07,wallH*.66,.07,wood,w*.105,baseH+wallH*.33,frontZ+.12);
     this.box(group,w*.12,.08,.055,warm,w*.045,baseH+wallH*.48,frontZ+.13);
     this.addGableRoof(group,w,d,eaveY,wallH*.42,roof,.55);
+    this.addRoofRibs(group,w,d,eaveY,wallH*.42,darkWood,.55);
     const roofRise=wallH*.42,roofHalf=(w+.55*2)/2;
     const chimneyRoofY=eaveY+roofRise*(1-(w*.28)/roofHalf);
     const chimneyTop=chimneyRoofY+.68;
@@ -192,6 +227,7 @@ export class WorldRenderer{
     }
     this.box(group,w*.8,.12,.14,wood,0,1.72,porchZ+d*.2);
     this.box(group,w*.46,.14,.55,stone,0,.17,d*.98);
+    for(let step=0;step<3;step++)this.box(group,w*.5,.12,.42,stone,0,.08+step*.12,d*.98+step*.38);
     const lamp=this.material(0xe1b65f,.45,true,.82);
     this.box(group,.22,.3,.16,lamp,w*.34,baseH+wallH*.48,frontZ+.16);
   }
@@ -303,18 +339,21 @@ export class WorldRenderer{
         }
       }
     }else if(o.type==="gazebo"){
-      const platform=new THREE.Mesh(new THREE.CylinderGeometry(w*.59,w*.62,.32*(w/4.4),6),stone);platform.position.y=.16;group.add(platform);
+      const gazeboScale=Math.min(w,d)/4.4;
+      const platformRadius=Math.min(w,d)*.47;
+      const platform=new THREE.Mesh(new THREE.CylinderGeometry(platformRadius*.96,platformRadius,.32*gazeboScale,6),stone);platform.position.y=.16*gazeboScale;group.add(platform);
       const postMat=this.material(0x805d3c),railMat=this.material(0x654a32);
-      const postRadius=w*.45,benchScale=w/4.4;
+      const postRadius=Math.min(w,d)*.37,benchScale=gazeboScale;
       for(let i=0;i<6;i++){
         const a=i*Math.PI/3,x=Math.cos(a)*postRadius,z=Math.sin(a)*postRadius;
         this.box(group,.2*benchScale,h*.7,.2*benchScale,postMat,x,h*.35,z);
-        const rail=new THREE.Mesh(new THREE.BoxGeometry(w*.27,.12*benchScale,.12*benchScale),railMat);
-        rail.position.set(Math.cos(a+Math.PI/6)*postRadius*.88,.82*(h/3.4),Math.sin(a+Math.PI/6)*postRadius*.88);
+        const rail=new THREE.Mesh(new THREE.BoxGeometry(postRadius*.98,.12*benchScale,.12*benchScale),railMat);
+        rail.position.set(Math.cos(a+Math.PI/6)*postRadius*.88,.82*benchScale,Math.sin(a+Math.PI/6)*postRadius*.88);
         rail.rotation.y=-(a+Math.PI/6);group.add(rail);
       }
-      const canopy=new THREE.Mesh(new THREE.ConeGeometry(w*.72,h*.34,6),roof);canopy.position.y=h*.85;group.add(canopy);
-      const eave=new THREE.Mesh(new THREE.CylinderGeometry(w*.68,w*.68,.18*(w/4.4),6),darkWood);eave.position.y=h*.68;group.add(eave);
+      const canopyRadius=Math.min(w,d)*.56;
+      const canopy=new THREE.Mesh(new THREE.ConeGeometry(canopyRadius,h*.34,6),roof);canopy.position.y=h*.85;group.add(canopy);
+      const eave=new THREE.Mesh(new THREE.CylinderGeometry(canopyRadius*.98,canopyRadius*.98,.18*benchScale,6),darkWood);eave.position.y=h*.68;group.add(eave);
       this.addBench(group,-.2*benchScale,.05*benchScale,0,wood,darkWood,benchScale);
       this.addBench(group,.35*benchScale,-.78*benchScale,Math.PI*.5,wood,darkWood,benchScale);
     }else if(o.type==="firepit"){
