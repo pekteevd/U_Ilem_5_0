@@ -30,6 +30,7 @@ export function createInitialState(){
       {id:"alexey",name:"Алексей",role:"Мастерские и техника",energy:100,skills:{construction:2,woodwork:2,mechanics:2}},
       {id:"sergey",name:"Сергей",role:"Хозяйство и помощь",energy:100,skills:{construction:1,maintenance:2,logistics:1}}
     ],
+    buildStages:WORLD_OBJECTS.map(o=>({id:"stage-"+o.id,objectId:o.id,title:"Первичный осмотр и оценка состояния",description:"Зафиксировать фактическое состояние объекта без предположений о дефектах.",status:"planned",progress:0,workHours:2,cost:0,requiredMaterials:[],taskId:null})),
     tasks:[],
     movements:[],
     settings:{autosave:true,dayLengthMinutes:20}
