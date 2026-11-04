@@ -292,12 +292,13 @@ export class WorldRenderer{
       // Entrance door and three interior planting beds.
       this.box(group,w*.2,h*.62,.09,darkWood,0,h*.34,d*.5+.055);
       this.box(group,w*.15,h*.57,.045,glass,0,h*.34,d*.5+.11);
+      const plantScale=w/6.2;
       for(let row=0;row<3;row++){
-        const z=(row-1)*.78;
-        this.box(group,w*.68,.15,.34,soil,0,.22,z);
+        const z=(row-1)*.78*plantScale;
+        this.box(group,w*.68,.15*plantScale,.34*plantScale,soil,0,.22*plantScale,z);
         for(let i=0;i<7;i++){
-          const plant=new THREE.Mesh(new THREE.SphereGeometry(.12,7,6),leaf);
-          plant.position.set((i-3)*.48,.48,z);group.add(plant);
+          const plant=new THREE.Mesh(new THREE.SphereGeometry(.12*plantScale,7,6),leaf);
+          plant.position.set((i-3)*.48*plantScale,.48*plantScale,z);group.add(plant);
         }
       }
     }else if(o.type==="gazebo"){
@@ -306,15 +307,16 @@ export class WorldRenderer{
       const postRadius=w*.45;
       for(let i=0;i<6;i++){
         const a=i*Math.PI/3,x=Math.cos(a)*postRadius,z=Math.sin(a)*postRadius;
-        this.box(group,.2,h*.7,.2,postMat,x,h*.35,z);
-        const rail=new THREE.Mesh(new THREE.BoxGeometry(1.2,.12,.12),railMat);
-        rail.position.set(Math.cos(a+Math.PI/6)*postRadius*.88,.82,Math.sin(a+Math.PI/6)*postRadius*.88);
+        this.box(group,.2,.2,.2,postMat,x,h*.35,z);
+        const rail=new THREE.Mesh(new THREE.BoxGeometry(w*.27,.12,.12),railMat);
+        rail.position.set(Math.cos(a+Math.PI/6)*postRadius*.88,.82*h/4,Math.sin(a+Math.PI/6)*postRadius*.88);
         rail.rotation.y=-(a+Math.PI/6);group.add(rail);
       }
       const canopy=new THREE.Mesh(new THREE.ConeGeometry(w*.72,h*.34,6),roof);canopy.position.y=h*.85;group.add(canopy);
       const eave=new THREE.Mesh(new THREE.CylinderGeometry(w*.68,w*.68,.18,6),darkWood);eave.position.y=h*.68;group.add(eave);
-      this.addBench(group,-.2,.05,0,wood,darkWood);
-      this.addBench(group,.35,-.78,Math.PI*.5,wood,darkWood);
+      const benchScale=w/4.4;
+      this.addBench(group,-.2*benchScale,.05*benchScale,0,wood,darkWood,benchScale);
+      this.addBench(group,.35*benchScale,-.78*benchScale,Math.PI*.5,wood,darkWood,benchScale);
     }else if(o.type==="firepit"){
       const ground=new THREE.Mesh(new THREE.CircleGeometry(w*.72,24),new THREE.MeshStandardMaterial({color:0x88765b,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.y=.025;group.add(ground);
       const ring=new THREE.Mesh(new THREE.TorusGeometry(w*.36,.32,8,24),stone);ring.rotation.x=Math.PI/2;ring.position.y=.34;group.add(ring);
@@ -324,17 +326,18 @@ export class WorldRenderer{
         const rock=new THREE.Mesh(new THREE.DodecahedronGeometry(.31,0),stone);
         rock.position.set(Math.cos(a)*w*.36,.38,Math.sin(a)*w*.36);rock.scale.set(1,.72,.9);group.add(rock);
       }
+      const fireScale=w/3.4;
       const logMat=this.material(0x65462d),ember=this.material(0xe78a38,.45,true,.9);
-      const log1=this.box(group,1.75,.24,.23,logMat,0,.45,0);log1.rotation.y=.42;
-      const log2=this.box(group,1.65,.22,.22,logMat,0,.58,0);log2.rotation.y=-.6;
-      const flameA=new THREE.Mesh(new THREE.ConeGeometry(.58,1.55,7),warm);flameA.position.y=1.35;group.add(flameA);
-      const flameB=new THREE.Mesh(new THREE.ConeGeometry(.34,1.05,6),ember);flameB.position.set(.18,1.25,.08);group.add(flameB);
-      const flameC=new THREE.Mesh(new THREE.ConeGeometry(.25,.82,6),warm);flameC.position.set(-.18,1.06,-.08);group.add(flameC);
-      const fireLight=new THREE.PointLight(0xff8a3d,2.4,12);fireLight.position.y=1.35;group.add(fireLight);
+      const log1=this.box(group,1.75*fireScale,.24*fireScale,.23*fireScale,logMat,0,.45*fireScale,0);log1.rotation.y=.42;
+      const log2=this.box(group,1.65*fireScale,.22*fireScale,.22*fireScale,logMat,0,.58*fireScale,0);log2.rotation.y=-.6;
+      const flameA=new THREE.Mesh(new THREE.ConeGeometry(.58*fireScale,1.55*fireScale,7),warm);flameA.position.y=1.35*fireScale;group.add(flameA);
+      const flameB=new THREE.Mesh(new THREE.ConeGeometry(.34*fireScale,1.05*fireScale,6),ember);flameB.position.set(.18*fireScale,1.25*fireScale,.08*fireScale);group.add(flameB);
+      const flameC=new THREE.Mesh(new THREE.ConeGeometry(.25*fireScale,.82*fireScale,6),warm);flameC.position.set(-.18*fireScale,1.06*fireScale,-.08*fireScale);group.add(flameC);
+      const fireLight=new THREE.PointLight(0xff8a3d,2.4,12*fireScale);fireLight.position.y=1.35*fireScale;group.add(fireLight);
       this.flameEffects.push({flames:[flameA,flameB,flameC],light:fireLight,phase:this.flameEffects.length*.83});
       for(let i=0;i<4;i++){
         const a=i*Math.PI/2;
-        this.addBench(group,Math.cos(a)*w*.38,Math.sin(a)*w*.38,a+Math.PI/2,wood,darkWood,.42);
+        this.addBench(group,Math.cos(a)*w*.38,Math.sin(a)*w*.38,a+Math.PI/2,wood,darkWood,.42*fireScale);
       }
     }else if(o.type==="garden"){
       this.addGardenFence(group,w*.94,d*.94,darkWood);
@@ -350,7 +353,8 @@ export class WorldRenderer{
         }
       }
       const orchard=[[-w*.34,-d*.34,.85],[-w*.12,-d*.35,.72],[w*.18,-d*.34,.8],[w*.34,d*.28,.82]];
-      orchard.forEach(([x,z,s],i)=>this.addTree(group,x,z,s,i%2===0));
+      const treeScale=w/7;
+      orchard.forEach(([x,z,s],i)=>this.addTree(group,x,z,s*treeScale,i%2===0));
       this.box(group,w*.12,.55,.12,darkWood,w*.42,.28,-d*.42);
     }else if(o.type==="well"){
       const radius=Math.min(w,d)*.43;
