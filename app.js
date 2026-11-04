@@ -46,7 +46,7 @@ function renderTasks(){
     $("calendar-list").innerHTML=[...state.tasks].sort((a,b)=>a.dueDay-b.dueDay).map(t=>'<div class="task-card"><div class="task-main"><b>День '+t.dueDay+': '+esc(t.title)+'</b><small>'+esc(state.objects.find(o=>o.id===t.objectId)?.name||"Общая задача")+'</small></div></div>').join("");
     document.querySelectorAll("[data-task-status]").forEach(el=>el.addEventListener("change",()=>{
       const t=state.tasks.find(x=>x.id===el.dataset.taskStatus);
-      if(t){t.status=el.value;t.updatedAt=new Date().toISOString();scheduleSave();renderTasks();renderSelected();}
+      if(t){t.status=el.value;t.updatedAt=new Date().toISOString();const stage=(state.buildStages||[]).find(x=>x.id===t.stageId);if(stage){stage.status=el.value==="done"?"done":el.value==="in_progress"?"in_progress":el.value==="blocked"?"blocked":"planned";if(el.value==="done")stage.progress=100;}scheduleSave();renderTasks();renderSelected();renderTab();}
     }));
     document.querySelectorAll("[data-task-owner]").forEach(el=>el.addEventListener("change",()=>{
       const t=state.tasks.find(x=>x.id===el.dataset.taskOwner);
@@ -126,6 +126,7 @@ async function checkOllama(){
 }
 async function init(){
   const loaded=await loadState();if(loaded.state)state=loaded.state;
+  if(!Array.isArray(state.buildStages))state.buildStages=createInitialState().buildStages;
   // Preserve saved character data, but restore canonical team members missing from older saves.
   const defaults=createInitialState().characters;
   const saved=Array.isArray(state.characters)?state.characters:[];
