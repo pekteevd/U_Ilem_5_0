@@ -25,7 +25,7 @@ const httpErrors = [];
 
 page.on("pageerror", error => errors.push("pageerror: " + error.message));
 page.on("console", message => {
-  if (message.type() === "error" && !message.text().includes("favicon.ico")) errors.push("console: " + message.text());
+  if (message.type() === "error" && !message.text().includes("Failed to load resource: the server responded with a status of 404")) errors.push("console: " + message.text());
 });
 page.on("requestfailed", request => failedRequests.push({
   url: request.url(),
