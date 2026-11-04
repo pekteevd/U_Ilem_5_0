@@ -450,6 +450,15 @@ export class WorldRenderer{
     this.buildModel(group,object);this.addBuildingCondition(group,object);this.scene.add(group);this.objectGroups.set(object.id,group);
     group.traverse(node=>{if(node.isMesh){node.userData.objectId=object.id;this.pickables.push(node);node.castShadow=true;node.receiveShadow=true;}});
   }
+  updateObject(object){
+    const previous=this.objectGroups.get(object.id);
+    if(previous){
+      const removed=new Set();previous.traverse(node=>{if(node.isMesh)removed.add(node);});
+      this.pickables=this.pickables.filter(node=>!removed.has(node));
+      this.scene.remove(previous);this.objectGroups.delete(object.id);
+    }
+    this.addObject(object);
+  }
   addObjects(objects){objects.forEach(o=>this.addObject(o));}
   syncCharacters(characters,tasks,objects){
     if(!this.mapReady){this.pendingCharacters=[characters,tasks,objects];return;}
