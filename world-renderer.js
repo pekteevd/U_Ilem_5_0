@@ -304,7 +304,7 @@ export class WorldRenderer{
     }else if(o.type==="gazebo"){
       const platform=new THREE.Mesh(new THREE.CylinderGeometry(w*.59,w*.62,.32*(w/4.4),6),stone);platform.position.y=.16;group.add(platform);
       const postMat=this.material(0x805d3c),railMat=this.material(0x654a32);
-      const postRadius=w*.45;
+      const postRadius=w*.45,benchScale=w/4.4;
       for(let i=0;i<6;i++){
         const a=i*Math.PI/3,x=Math.cos(a)*postRadius,z=Math.sin(a)*postRadius;
         this.box(group,.2*benchScale,h*.7,.2*benchScale,postMat,x,h*.35,z);
@@ -314,10 +314,10 @@ export class WorldRenderer{
       }
       const canopy=new THREE.Mesh(new THREE.ConeGeometry(w*.72,h*.34,6),roof);canopy.position.y=h*.85;group.add(canopy);
       const eave=new THREE.Mesh(new THREE.CylinderGeometry(w*.68,w*.68,.18*(w/4.4),6),darkWood);eave.position.y=h*.68;group.add(eave);
-      const benchScale=w/4.4;
       this.addBench(group,-.2*benchScale,.05*benchScale,0,wood,darkWood,benchScale);
       this.addBench(group,.35*benchScale,-.78*benchScale,Math.PI*.5,wood,darkWood,benchScale);
     }else if(o.type==="firepit"){
+      const fireScale=w/3.4;
       const ground=new THREE.Mesh(new THREE.CircleGeometry(w*.72,24),new THREE.MeshStandardMaterial({color:0x88765b,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.y=.025;group.add(ground);
       const ring=new THREE.Mesh(new THREE.TorusGeometry(w*.36,.32*fireScale,8,24),stone);ring.rotation.x=Math.PI/2;ring.position.y=.34;group.add(ring);
       const bed=new THREE.Mesh(new THREE.CylinderGeometry(w*.31,w*.32,.18*fireScale,18),soil);bed.position.y=.22*fireScale;group.add(bed);
@@ -326,7 +326,6 @@ export class WorldRenderer{
         const rock=new THREE.Mesh(new THREE.DodecahedronGeometry(.31*fireScale,0),stone);
         rock.position.set(Math.cos(a)*w*.36,.38*fireScale,Math.sin(a)*w*.36);rock.scale.set(1,.72,.9);group.add(rock);
       }
-      const fireScale=w/3.4;
       const logMat=this.material(0x65462d),ember=this.material(0xe78a38,.45,true,.9);
       const log1=this.box(group,1.75*fireScale,.24*fireScale,.23*fireScale,logMat,0,.45*fireScale,0);log1.rotation.y=.42;
       const log2=this.box(group,1.65*fireScale,.22*fireScale,.22*fireScale,logMat,0,.58*fireScale,0);log2.rotation.y=-.6;
