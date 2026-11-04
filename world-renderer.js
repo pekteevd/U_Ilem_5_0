@@ -192,10 +192,10 @@ export class WorldRenderer{
     }
     this.gableFace(group,w,wallH*.34,d/2+.045,wood,eaveY);
     this.gableFace(group,w,wallH*.34,-d/2-.045,wood,eaveY);
-    const frontZ=d/2+.09,backZ=-d/2-.09,sideX=w/2+.055;
+    const frontFaceZ=d/2+.09,backFaceZ=-d/2-.09,sideX=w/2+.055;
     const siding=this.material(0x795a3c),trim=this.material(0x4d3929);
-    this.addFacadeBattens(group,w,wallH,frontZ,siding,.78,baseH);
-    this.addFacadeBattens(group,w,wallH,backZ,siding,.78,baseH);
+    this.addFacadeBattens(group,w,wallH,frontFaceZ,siding,.78,baseH);
+    this.addFacadeBattens(group,w,wallH,backFaceZ,siding,.78,baseH);
     for(const x of [-sideX,sideX]){
       for(let z=-d/2+.18;z<=d/2-.1;z+=.78)this.box(group,.075,wallH*.94,.055, siding,x,baseH+wallH/2,z);
       this.box(group,.11,.12,d+.12,trim,x,baseH+wallH*.96,0);
