@@ -1,7 +1,7 @@
 const http=require("node:http");
 const fs=require("node:fs");
 const path=require("node:path");
-const ROOT=__dirname,DATA=path.join(ROOT,"data"),SAVE=path.join(DATA,"savegame.json"),PORT=4175,HOST="127.0.0.1";
+const ROOT=__dirname,DATA=path.join(ROOT,"data"),SAVE=path.join(DATA,"savegame.json"),SAVE_BACKUP=SAVE+".bak",PORT=4175,HOST="127.0.0.1";
 const OLLAMA_MODELS=["qwen3:4b","qwen3:1.7b"];
 let saveWriteQueue=Promise.resolve();
 fs.mkdirSync(DATA,{recursive:true});
@@ -9,6 +9,8 @@ const MIME={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",
 function send(res,status,body,type="application/json; charset=utf-8"){res.writeHead(status,{"Content-Type":type,"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"});res.end(body);}
 function safePath(urlPath){const decoded=decodeURIComponent(urlPath.split("?")[0]);const resolved=path.resolve(ROOT,"."+decoded);return resolved===ROOT||resolved.startsWith(ROOT+path.sep)?resolved:null;}
 function readBody(req,limit=120000){return new Promise((resolve,reject)=>{let body="";req.on("data",chunk=>{body+=chunk;if(body.length>limit){reject(new Error("request_too_large"));req.destroy();}});req.on("end",()=>resolve(body));req.on("error",reject);});}
+function validSavePayload(payload){const state=payload?.state||payload;return !!state&&state.schemaVersion===1&&Array.isArray(state.objects)&&Array.isArray(state.tasks)&&!!state.economy;}
+function readValidSave(file){try{if(!fs.existsSync(file))return null;const raw=fs.readFileSync(file,"utf8"),payload=JSON.parse(raw);return validSavePayload(payload)?{raw,payload,state:payload.state||payload}:null;}catch{return null;}}
 async function ollamaHealth(){
   const r=await fetch("http://127.0.0.1:11434/api/tags",{signal:AbortSignal.timeout(2500)});
   if(!r.ok)throw new Error("ollama_http_"+r.status);
@@ -20,42 +22,53 @@ const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,"http://"+HOST);
   if(url.pathname==="/api/health")return send(res,200,JSON.stringify({ok:true,project:"У Илем 5.0"}));
   if(url.pathname==="/api/save"&&req.method==="GET"){
-    if(!fs.existsSync(SAVE))return send(res,404,JSON.stringify({error:"save_not_found"}));
-    return send(res,200,fs.readFileSync(SAVE,"utf8"));
+    const primary=readValidSave(SAVE);
+    if(primary)return send(res,200,primary.raw);
+    const backup=readValidSave(SAVE_BACKUP);
+    if(backup){
+      try{
+        const recoveryTemp=SAVE+".recovery.tmp";
+        fs.writeFileSync(recoveryTemp,backup.raw,"utf8");
+        fs.renameSync(recoveryTemp,SAVE);
+      }catch(error){console.error("Save backup recovery could not replace the primary file:",error);}
+      return send(res,200,backup.raw);
+    }
+    if(!fs.existsSync(SAVE)&&!fs.existsSync(SAVE_BACKUP))return send(res,404,JSON.stringify({error:"save_not_found"}));
+    return send(res,500,JSON.stringify({error:"save_and_backup_invalid"}));
   }
   if(url.pathname==="/api/save"&&req.method==="POST"){
     let state;
     try{
       const body=await readBody(req,5_000_000);
       state=JSON.parse(body);
-      if(state?.schemaVersion!==1||!Array.isArray(state.objects)||!Array.isArray(state.tasks)||!state.economy)throw new Error("invalid_state_schema");
+      if(!validSavePayload(state))throw new Error("invalid_state_schema");
     }catch(error){
       return send(res,error.message==="request_too_large"?413:400,JSON.stringify({error:error.message}));
     }
 
-    // Serialize the complete compare-and-write operation. Without this queue,
-    // concurrent requests could both compare against the same old snapshot.
+    // Serialize comparison, backup rotation and replacement as one operation.
     const persist=saveWriteQueue.catch(()=>{}).then(()=>{
+      const current=readValidSave(SAVE)||readValidSave(SAVE_BACKUP);
       const incomingTime=Date.parse(state.meta?.lastSavedAt||"");
-      if(Number.isFinite(incomingTime)&&fs.existsSync(SAVE)){
-        try{
-          const current=JSON.parse(fs.readFileSync(SAVE,"utf8"));
-          const currentState=current.state||current;
-          const currentTime=Date.parse(currentState.meta?.lastSavedAt||"");
-          if(Number.isFinite(currentTime)&&incomingTime<currentTime){
-            const error=new Error("stale_save_rejected");
-            error.savedAt=current.savedAt||currentState.meta.lastSavedAt;
-            throw error;
-          }
-        }catch(error){
-          if(error.message==="stale_save_rejected")throw error;
-          // A damaged legacy save must not block recovery with a valid new snapshot.
+      const currentTime=current?Date.parse(current.state.meta?.lastSavedAt||""):NaN;
+      if(Number.isFinite(incomingTime)&&Number.isFinite(currentTime)){
+        if(incomingTime<currentTime){
+          const error=new Error("stale_save_rejected");
+          error.savedAt=current.payload.savedAt||current.state.meta.lastSavedAt;
+          throw error;
+        }
+        if(incomingTime===currentTime){
+          if(JSON.stringify(state)===JSON.stringify(current.state))return {ok:true,savedAt:current.payload.savedAt||current.state.meta.lastSavedAt,idempotent:true};
+          const error=new Error("stale_save_rejected");
+          error.savedAt=current.payload.savedAt||current.state.meta.lastSavedAt;
+          throw error;
         }
       }
       const savedAt=new Date().toISOString();
       const temp=SAVE+".tmp";
       fs.writeFileSync(temp,JSON.stringify({state,savedAt}),"utf8");
-      if(fs.existsSync(SAVE))fs.copyFileSync(SAVE,SAVE+".bak");
+      if(readValidSave(SAVE))fs.copyFileSync(SAVE,SAVE_BACKUP);
+      else if(!readValidSave(SAVE_BACKUP)&&fs.existsSync(SAVE))console.warn("Existing save is invalid; no damaged backup was created.");
       fs.renameSync(temp,SAVE);
       return {ok:true,savedAt};
     });
