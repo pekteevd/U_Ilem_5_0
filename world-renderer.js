@@ -25,7 +25,7 @@ export class WorldRenderer{
   }
   loadMap(){
     const loader=new THREE.TextureLoader();
-    loader.load("./U_Ilem_5_0_visual_base.png",texture=>{
+    loader.load("./U_Ilem_map_empty.png",texture=>{
       texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=Math.min(8,this.renderer.capabilities.getMaxAnisotropy());
       const image=texture.image;this.mapAspect=image.width/image.height;this.mapHeight=this.mapWidth/this.mapAspect;
       const geometry=new THREE.PlaneGeometry(this.mapWidth,this.mapHeight);
