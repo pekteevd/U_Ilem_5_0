@@ -21,6 +21,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, de
 const errors = [];
 const failedRequests = [];
 const mapResponses = [];
+const httpErrors = [];
 
 page.on("pageerror", error => errors.push("pageerror: " + error.message));
 page.on("console", message => {
@@ -32,9 +33,19 @@ page.on("requestfailed", request => failedRequests.push({
 }));
 await page.route("**/favicon.ico", route => route.fulfill({ status: 204, body: "" }));
 
-page.on("response", response => {
+page.on("response", async response => {
   if (response.url().includes("U_Ilem_map_empty.png")) {
     mapResponses.push({ status: response.status(), url: response.url() });
+  }
+  if (response.status() >= 400) {
+    const body = await response.text().catch(() => "");
+    const expectedFirstRun = response.url().endsWith("/api/save") &&
+      response.status() === 404 && body.includes("save_not_found");
+    if (!expectedFirstRun) httpErrors.push({
+      status: response.status(),
+      url: response.url(),
+      body: body.slice(0, 300)
+    });
   }
 });
 
@@ -130,12 +141,13 @@ try {
   await page.click('[data-tab="overview"]');
 
   const report = {
-    result: errors.length === 0 && failedRequests.length === 0 && objectSelections.length === WORLD_OBJECTS.length ? "PASS" : "FAIL",
+    result: errors.length === 0 && failedRequests.length === 0 && httpErrors.length === 0 && objectSelections.length === WORLD_OBJECTS.length ? "PASS" : "FAIL",
     pageStatus: response.status(),
     scene,
     mapResponses,
     constructionTabVisible,
     objectSelections,
+    httpErrors,
     consoleAndPageErrors: errors,
     failedRequests
   };
@@ -143,7 +155,7 @@ try {
   fs.writeFileSync(path.join(out, "report.json"), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
 
-  if (errors.length || failedRequests.length || objectSelections.length !== WORLD_OBJECTS.length) process.exitCode = 1;
+  if (errors.length || failedRequests.length || httpErrors.length || objectSelections.length !== WORLD_OBJECTS.length) process.exitCode = 1;
 } catch (error) {
   fs.writeFileSync(path.join(out, "failure.txt"), String(error?.stack || error));
   console.error(error);
