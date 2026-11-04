@@ -259,9 +259,13 @@ export class WorldRenderer{
         const x=-w*.48+i*w*.24;
         this.box(group,.12,h*.72,.12,frame,x,h*.36,d*.48);
         this.box(group,.12,h*.72,.12,frame,x,h*.36,-d*.48);
+        const leftPane=this.box(group,slopeLen,.055,d-.16,glass,x-halfW*.25,h*.69,0);leftPane.rotation.z=angle;
+        const rightPane=this.box(group,slopeLen,.055,d-.16,glass,x+halfW*.25,h*.69,0);rightPane.rotation.z=-angle;
         const left=this.box(group,slopeLen,.12,.12,frame,x-halfW*.25,h*.69,0);left.rotation.z=angle;
         const right=this.box(group,slopeLen,.12,.12,frame,x+halfW*.25,h*.69,0);right.rotation.z=-angle;
       }
+      this.gableFace(group,w,h*.3,d*.49,glass,h*.58);
+      this.gableFace(group,w,h*.3,-d*.49,glass,h*.58);
       this.box(group,.16,.16,d,frame,0,ridgeY,0);
       this.box(group,.16,h*.72,.16,frame,-w*.48,h*.36,0);
       this.box(group,.16,h*.72,.16,frame,w*.48,h*.36,0);
@@ -310,7 +314,7 @@ export class WorldRenderer{
       this.flameEffects.push({flames:[flameA,flameB,flameC],light:fireLight,phase:this.flameEffects.length*.83});
       for(let i=0;i<4;i++){
         const a=i*Math.PI/2;
-        this.addBench(group,Math.cos(a)*w*.92,Math.sin(a)*w*.92,a+Math.PI/2,wood,darkWood);
+        this.addBench(group,Math.cos(a)*w*.65,Math.sin(a)*w*.65,a+Math.PI/2,wood,darkWood);
       }
     }else if(o.type==="garden"){
       this.addGardenFence(group,w*.94,d*.94,darkWood);
