@@ -1,0 +1,62 @@
+name: Browser scene smoke test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**.js"
+      - "**.html"
+      - "**.css"
+      - "*.png"
+      - "tests/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-scene-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  chromium-webgl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Playwright
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Start local game server
+        run: |
+          node server.js > /tmp/u-ilem-server.log 2>&1 &
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4175/api/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/u-ilem-server.log
+          exit 1
+
+      - name: Run real Chromium and WebGL smoke test
+        run: node tests/browser-scene-check.mjs
+
+      - name: Upload screenshot and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: u-ilem-5-browser-scene
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 7
