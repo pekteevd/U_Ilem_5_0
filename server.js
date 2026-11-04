@@ -27,9 +27,7 @@ const server=http.createServer(async(req,res)=>{
     const backup=readValidSave(SAVE_BACKUP);
     if(backup){
       try{
-        const recoveryTemp=SAVE+".recovery.tmp";
-        fs.writeFileSync(recoveryTemp,backup.raw,"utf8");
-        fs.renameSync(recoveryTemp,SAVE);
+        fs.copyFileSync(SAVE_BACKUP,SAVE);
       }catch(error){console.error("Save backup recovery could not replace the primary file:",error);}
       return send(res,200,backup.raw);
     }
@@ -42,6 +40,7 @@ const server=http.createServer(async(req,res)=>{
       const body=await readBody(req,5_000_000);
       state=JSON.parse(body);
       if(!validSavePayload(state))throw new Error("invalid_state_schema");
+      if(!Number.isFinite(Date.parse(state.meta?.lastSavedAt||"")))throw new Error("invalid_save_timestamp");
     }catch(error){
       return send(res,error.message==="request_too_large"?413:400,JSON.stringify({error:error.message}));
     }
