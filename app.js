@@ -95,8 +95,8 @@ function processWarehouseForm(form){
     if(!Number.isSafeInteger(total)||total<=0){toast("Сумма возврата меньше одного рубля. Объедини возврат с большей партией.");return;}
     const stock=Number(item.quantity);if(!Number.isFinite(stock)||stock<0){toast("Остаток материала повреждён. Возврат отменён.");return;}
     if(qty>stock){toast("Нельзя вернуть больше материала, чем фактически осталось на складе.");return;}
-    nextQuantity=Math.round((stock+qty)*100)/100;nextBudget=budget+total;
-    if(!Number.isFinite(nextQuantity)||nextQuantity<stock||!Number.isSafeInteger(nextBudget)){toast("Возврат выводит остатки или бюджет за допустимый диапазон.");return;}
+    nextQuantity=Math.round((stock-qty)*100)/100;nextBudget=budget+total;
+    if(!Number.isFinite(nextQuantity)||nextQuantity<0||nextQuantity>stock||!Number.isSafeInteger(nextBudget)){toast("Возврат выводит остатки или бюджет за допустимый диапазон.");return;}
     transaction={id:"txn-"+crypto.randomUUID(),type:"income",description:"Возврат закупки: "+item.name,amount:total,createdAt:new Date().toISOString(),source:"warehouse-return",purchaseMovementId:purchase.id};
     movement={id:"mov-"+crypto.randomUUID(),itemId:item.id,itemName:item.name,type:"out",quantity:qty,unit:item.unit,total,createdAt:new Date().toISOString(),source:"purchase-return",purchaseMovementId:purchase.id,transactionId:transaction.id};
   }else{
