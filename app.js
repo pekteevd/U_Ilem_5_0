@@ -1,6 +1,6 @@
 import {WORLD_OBJECTS,createInitialState} from "./world-data.js";
 import {WorldRenderer} from "./world-renderer.js";
-import {loadState,saveState,exportState} from "./persistence.js";
+import {loadState,saveState,saveLocalSnapshot,exportState} from "./persistence.js";
 
 let state=createInitialState(),selectedId=null,renderer=null,saveTimer=null,saveRevision=0,ollamaReady=false,activeTab="overview";
 const $=id=>document.getElementById(id);
@@ -276,7 +276,7 @@ async function init(){
   $("export-save").addEventListener("click",()=>exportState(state));
   document.querySelectorAll("[data-tab]").forEach(el=>el.addEventListener("click",()=>{activeTab=el.dataset.tab;renderTabs();}));
   $("send-chat").addEventListener("click",sendChat);$("chat-input").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat();}});
-  window.addEventListener("beforeunload",()=>{try{localStorage.setItem("u_ilem_5_0_save_v1",JSON.stringify(state));}catch{}});
+  window.addEventListener("beforeunload",()=>{saveLocalSnapshot(state);});
   $("save-state").textContent=loaded.source==="server"?"Сохранение загружено":"Новая игра";
 }
 init().catch(error=>{console.error(error);toast("Ошибка запуска: "+error.message);});
