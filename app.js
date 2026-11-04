@@ -46,7 +46,7 @@ function renderTasks(){
     $("calendar-list").innerHTML=[...state.tasks].sort((a,b)=>a.dueDay-b.dueDay).map(t=>'<div class="task-card"><div class="task-main"><b>День '+t.dueDay+': '+esc(t.title)+'</b><small>'+esc(state.objects.find(o=>o.id===t.objectId)?.name||"Общая задача")+'</small></div></div>').join("");
     document.querySelectorAll("[data-task-status]").forEach(el=>el.addEventListener("change",()=>{
       const t=state.tasks.find(x=>x.id===el.dataset.taskStatus);
-      if(t){const stage=(state.buildStages||[]).find(x=>x.id===t.stageId);if(stage?.status==="done"&&el.value!=="done"){toast("Принятый этап нельзя откатить через статус задачи.");renderTasks();return;}if(el.value==="in_progress"&&(!t.ownerId||!state.characters.some(c=>c.id===t.ownerId))){toast("Перед началом работы назначь исполнителя.");renderTasks();return;}if(el.value==="in_progress"&&state.tasks.some(x=>x.id!==t.id&&x.ownerId===t.ownerId&&x.status==="in_progress")){toast("Этот участник уже выполняет другую задачу.");renderTasks();return;}t.status=el.value;t.updatedAt=new Date().toISOString();if(stage&&stage.status!=="done"){stage.status=el.value==="done"?"ready":el.value==="in_progress"?"in_progress":el.value==="blocked"?"blocked":"planned";stage.progress=el.value==="done"?90:el.value==="in_progress"?50:0;}scheduleSave();renderTasks();renderSelected();renderTab();}
+      if(t){const stage=(state.buildStages||[]).find(x=>x.id===t.stageId);if(stage?.status==="done"&&el.value!=="done"){toast("Принятый этап нельзя откатить через статус задачи.");renderTasks();return;}if(el.value==="in_progress"&&(!t.ownerId||!state.characters.some(c=>c.id===t.ownerId))){toast("Перед началом работы назначь исполнителя.");renderTasks();return;}if(el.value==="done"&&(stage||t.source==="construction")&&t.status!=="in_progress"){toast("Строительную задачу можно завершить только после начала работы.");renderTasks();return;}if(el.value==="done"&&(stage||t.source==="construction")&&(!t.ownerId||!state.characters.some(c=>c.id===t.ownerId))){toast("Нельзя завершить строительную задачу без назначенного исполнителя.");renderTasks();return;}if(el.value==="in_progress"&&state.tasks.some(x=>x.id!==t.id&&x.ownerId===t.ownerId&&x.status==="in_progress")){toast("Этот участник уже выполняет другую задачу.");renderTasks();return;}t.status=el.value;t.updatedAt=new Date().toISOString();if(stage&&stage.status!=="done"){stage.status=el.value==="done"?"ready":el.value==="in_progress"?"in_progress":el.value==="blocked"?"blocked":"planned";stage.progress=el.value==="done"?90:el.value==="in_progress"?50:0;}scheduleSave();renderTasks();renderSelected();renderTab();}
     }));
     document.querySelectorAll("[data-task-actual-hours]").forEach(el=>el.addEventListener("change",()=>{const task=state.tasks.find(x=>x.id===el.dataset.taskActualHours);const hours=Number(el.value);if(!task||task.status!=="done"){toast("Фактические часы можно внести после завершения задачи.");renderTasks();return;}if(!Number.isFinite(hours)||hours<=0){toast("Укажи фактические часы больше нуля.");renderTasks();return;}task.actualHours=hours;task.updatedAt=new Date().toISOString();scheduleSave();}));
     document.querySelectorAll("[data-task-owner]").forEach(el=>el.addEventListener("change",()=>{
@@ -152,6 +152,11 @@ function acceptBuildStage(stageId){
     toast("Этот этап уже принят.");
     return;
   }
+  const assignedWorker=task.ownerId?(state.characters||[]).find(c=>c.id===task.ownerId):null;
+  if(!assignedWorker){
+    toast("Нельзя принять строительный этап без назначенного исполнителя.");
+    return;
+  }
   const actualHours=Number(task.actualHours);
   if(!Number.isFinite(actualHours)||actualHours<=0){
     toast("Перед приёмкой внеси фактически затраченные часы больше нуля в карточке задачи.");
@@ -207,7 +212,13 @@ function acceptBuildStage(stageId){
     date:now,event:"Принят этап: "+stage.title,cost,
     materials:Array.from(aggregated,([itemId,quantity])=>({itemId,quantity}))
   };
-  const worker=task.ownerId?(state.characters||[]).find(c=>c.id===task.ownerId):null;
+  const currentWorkedHours=Number(assignedWorker.workedHours??0);
+  const currentCompletedTasks=Number(assignedWorker.completedTasks??0);
+  if(!Number.isFinite(currentWorkedHours)||currentWorkedHours<0||!Number.isSafeInteger(currentCompletedTasks)||currentCompletedTasks<0||!Number.isFinite(currentWorkedHours+actualHours)||!Number.isSafeInteger(currentCompletedTasks+1)){
+    toast("Учёт рабочего времени исполнителя повреждён. Приёмка отменена.");
+    return;
+  }
+  const worker=assignedWorker;
 
   deductions.forEach(({item,quantity})=>{item.quantity=Number(item.quantity)-quantity;});
   state.movements=[...movementRows,...(state.movements||[])];
