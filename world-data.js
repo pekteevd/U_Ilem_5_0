@@ -10,20 +10,20 @@ export const WORLD_MAP_CONFIG = Object.freeze({
 });
 
 export const WORLD_OBJECTS = [
-  {id:"house-main",name:"Главный дом",type:"house",zone:"Жилая зона",icon:"⌂",description:"Основной жилой дом и центр повседневной жизни У Илем.",status:"Требует обустройства",position:{x:.48,y:.49},dimensions:{w:5.8,d:4.8,h:4.5}},
-  {id:"lighthouse",name:"Башня-маяк",type:"tower",zone:"Верхняя часть усадьбы",icon:"♜",description:"Деревянная водонапорная башня с обзорной площадкой и светом.",status:"Планируется",position:{x:.76,y:.28},dimensions:{w:2.6,d:2.6,h:8.2}},
-  {id:"warehouse",name:"Общий склад",type:"warehouse",zone:"Хозяйственная зона",icon:"▤",description:"Центральное хранение материалов, инструментов и запасов.",status:"Планируется",position:{x:.79,y:.41},dimensions:{w:4.1,d:3.6,h:3.6}},
-  {id:"greenhouse",name:"Теплица",type:"greenhouse",zone:"Огород",icon:"▱",description:"Защищённое пространство для выращивания рассады и культур.",status:"Планируется",position:{x:.29,y:.66},dimensions:{w:6.2,d:3.2,h:2.4}},
-  {id:"gazebo",name:"Беседка",type:"gazebo",zone:"Общая зона",icon:"⌑",description:"Место встреч, отдыха и совместной работы.",status:"Планируется",position:{x:.61,y:.66},dimensions:{w:4.4,d:4.2,h:3.4}},
-  {id:"firepit",name:"Костровая зона",type:"firepit",zone:"Общая зона",icon:"♨",description:"Открытый очаг и место вечерних встреч.",status:"Планируется",position:{x:.69,y:.78},dimensions:{w:3.4,d:3.4,h:2.2}},
-  {id:"garden",name:"Сад и огород",type:"garden",zone:"Зелёная зона",icon:"♧",description:"Плодовые деревья, грядки и сезонный уход.",status:"Требует ухода",position:{x:.36,y:.78},dimensions:{w:7,d:5,h:3.2}},
-  {id:"well",name:"Колодец",type:"well",zone:"Водоснабжение",icon:"◉",description:"Источник воды на первом этапе развития инфраструктуры.",status:"Действующий источник",position:{x:.43,y:.58},dimensions:{w:1.8,d:1.8,h:3.7}}
+  {id:"house-main",name:"Главный дом",type:"house",zone:"Жилая зона",icon:"⌂",description:"Основной жилой дом и центр повседневной жизни У Илем.",status:"Требует обустройства",position:{x:.909,y:.774},dimensions:{w:13.8,d:9.2,h:7.0}},
+  {id:"lighthouse",name:"Башня-маяк",type:"tower",zone:"Верхняя часть усадьбы",icon:"♜",description:"Деревянная водонапорная башня с обзорной площадкой и светом.",status:"Планируется",position:{x:.931,y:.521},dimensions:{w:2.8,d:2.8,h:8.2}},
+  {id:"warehouse",name:"Общий склад",type:"warehouse",zone:"Хозяйственная зона",icon:"▤",description:"Центральное хранение материалов, инструментов и запасов.",status:"Планируется",position:{x:.825,y:.325},dimensions:{w:4.0,d:3.5,h:3.6}},
+  {id:"greenhouse",name:"Теплица",type:"greenhouse",zone:"Огород",icon:"▱",description:"Защищённое пространство для выращивания рассады и культур.",status:"Планируется",position:{x:.356,y:.517},dimensions:{w:10.8,d:6.4,h:3.2}},
+  {id:"gazebo",name:"Беседка",type:"gazebo",zone:"Общая зона",icon:"⌑",description:"Место встреч, отдыха и совместной работы.",status:"Планируется",position:{x:.681,y:.481},dimensions:{w:8.2,d:6.0,h:4.0}},
+  {id:"firepit",name:"Костровая зона",type:"firepit",zone:"Общая зона",icon:"♨",description:"Открытый очаг и место вечерних встреч.",status:"Планируется",position:{x:.712,y:.569},dimensions:{w:4.8,d:3.6,h:2.2}},
+  {id:"garden",name:"Сад и огород",type:"garden",zone:"Зелёная зона",icon:"♧",description:"Плодовые деревья, грядки и сезонный уход.",status:"Требует ухода",position:{x:.230,y:.622},dimensions:{w:14.0,d:10.0,h:3.2}},
+  {id:"well",name:"Колодец",type:"well",zone:"Водоснабжение",icon:"◉",description:"Источник воды на первом этапе развития инфраструктуры.",status:"Действующий источник",position:{x:.547,y:.425},dimensions:{w:3.8,d:3.8,h:3.7}}
 ];
 
 export function createInitialState(){
   return {
     schemaVersion:1,
-    meta:{project:"У Илем 5.0",createdAt:new Date().toISOString(),lastSavedAt:null,day:1,season:"Весна",worldMapVersion:3},
+    meta:{project:"У Илем 5.0",createdAt:new Date().toISOString(),lastSavedAt:null,day:1,season:"Весна",worldMapVersion:4},
     economy:{budget:2000000,reserve:500000,currency:"RUB"},
     warehouse:[
       {id:"boards",name:"Доски",unit:"шт.",quantity:120,minimum:20},
@@ -72,7 +72,7 @@ export function migrateState(saved){
   ["objects","tasks","movements","transactions"].forEach(key=>{
     if(!Array.isArray(state[key])){state[key]=[];migrated=true;}
   });
-  if(savedWorldMapVersion<3){
+  if(savedWorldMapVersion<4){
     const previousObjects=state.objects;
     const knownIds=new Set(defaults.objects.map(object=>object.id));
     state.objects=defaults.objects.map(base=>{
@@ -87,7 +87,7 @@ export function migrateState(saved){
         dimensions:{...base.dimensions}
       };
     }).concat(previousObjects.filter(object=>object&& !knownIds.has(object.id)));
-    state.meta.worldMapVersion=3;
+    state.meta.worldMapVersion=4;
     migrated=true;
   }
   if(!Array.isArray(state.buildStages)){state.buildStages=defaults.buildStages;migrated=true;}
