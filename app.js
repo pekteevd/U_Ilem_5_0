@@ -33,11 +33,30 @@ function renderSelected(){
 function renderTasks(){
   renderHeader();renderCommunityAndLog();
   $("task-count").textContent=state.tasks.length;
-  $("header-task-count").textContent=state.tasks.length;
-  if(!state.tasks.length){$("task-list").innerHTML='<div class="empty-state">Пока нет задач. Выбери объект и добавь первую.</div>';$("calendar-list").innerHTML='<div class="empty-state">Запланированные задачи появятся здесь.</div>';return;}
-  $("task-list").innerHTML=state.tasks.map(t=>`<div class="task-card"><div class="task-main"><b>${esc(t.title)}</b><small>${esc(state.objects.find(o=>o.id===t.objectId)?.name||"Общая задача")} · день ${t.dueDay}</small></div><select data-task-status="${t.id}"><option value="planned" ${t.status==="planned"?"selected":""}>Запланирована</option><option value="in_progress" ${t.status==="in_progress"?"selected":""}>В работе</option><option value="blocked" ${t.status==="blocked"?"selected":""}>Заблокирована</option><option value="done" ${t.status==="done"?"selected":""}>Завершена</option></select></div>`).join("");
-  $("calendar-list").innerHTML=[...state.tasks].sort((a,b)=>a.dueDay-b.dueDay).map(t=>`<div class="task-card"><div class="task-main"><b>День ${t.dueDay}: ${esc(t.title)}</b><small>${esc(state.objects.find(o=>o.id===t.objectId)?.name||"Общая задача")}</small></div></div>`).join("");
-  document.querySelectorAll("[data-task-status]").forEach(el=>el.addEventListener("change",()=>{const t=state.tasks.find(x=>x.id===el.dataset.taskStatus);if(t){t.status=el.value;t.updatedAt=new Date().toISOString();scheduleSave();renderTasks();}}));
+  $("header-task-count").textContent=state.tasks.filter(t=>t.status!=="done").length;
+  if(!state.tasks.length){
+    $("task-list").innerHTML='<div class="empty-state">Пока нет задач. Выбери объект и добавь первую.</div>';
+    $("calendar-list").innerHTML='<div class="empty-state">Запланированные задачи появятся здесь.</div>';
+  }else{
+    const peopleOptions=ownerId=>'<option value="">Не назначен</option>'+state.characters.map(c=>'<option value="'+esc(c.id)+'" '+(ownerId===c.id?'selected':'')+'>'+esc(c.name)+'</option>').join("");
+    $("task-list").innerHTML=state.tasks.map(t=>{
+      const objectName=state.objects.find(o=>o.id===t.objectId)?.name||"Общая задача";
+      return '<div class="task-card"><div class="task-main"><b>'+esc(t.title)+'</b><small>'+esc(objectName)+' · день '+t.dueDay+'</small><div class="task-controls"><label>Исполнитель <select data-task-owner="'+esc(t.id)+'">'+peopleOptions(t.ownerId)+'</select></label><label>Статус <select data-task-status="'+esc(t.id)+'"><option value="planned" '+(t.status==="planned"?"selected":"")+'>Запланирована</option><option value="in_progress" '+(t.status==="in_progress"?"selected":"")+'>В работе</option><option value="blocked" '+(t.status==="blocked"?"selected":"")+'>Заблокирована</option><option value="done" '+(t.status==="done"?"selected":"")+'>Завершена</option></select></label></div></div></div>';
+    }).join("");
+    $("calendar-list").innerHTML=[...state.tasks].sort((a,b)=>a.dueDay-b.dueDay).map(t=>'<div class="task-card"><div class="task-main"><b>День '+t.dueDay+': '+esc(t.title)+'</b><small>'+esc(state.objects.find(o=>o.id===t.objectId)?.name||"Общая задача")+'</small></div></div>').join("");
+    document.querySelectorAll("[data-task-status]").forEach(el=>el.addEventListener("change",()=>{
+      const t=state.tasks.find(x=>x.id===el.dataset.taskStatus);
+      if(t){t.status=el.value;t.updatedAt=new Date().toISOString();scheduleSave();renderTasks();renderSelected();}
+    }));
+    document.querySelectorAll("[data-task-owner]").forEach(el=>el.addEventListener("change",()=>{
+      const t=state.tasks.find(x=>x.id===el.dataset.taskOwner);
+      if(t){t.ownerId=el.value||null;t.updatedAt=new Date().toISOString();scheduleSave();syncVisibleCharacters();renderSelected();}
+    }));
+  }
+  syncVisibleCharacters();
+}
+function syncVisibleCharacters(){
+  if(renderer?.syncCharacters)renderer.syncCharacters(state.characters,state.tasks,state.objects);
 }
 function selectObject(id){selectedId=id;renderSelected();renderTab();}
 function renderTab(){
@@ -76,7 +95,7 @@ function addChatMessage(role,name,message,kind=""){
 function newTask(){
   const title=$("task-title").value.trim(),object=selectedObject(),dueDay=Math.max(1,Number($("task-due").value)||1);
   if(!title){toast("Введи название задачи.");$("task-title").focus();return;}
-  const task={id:"task-"+crypto.randomUUID(),title,objectId:object?.id||null,source:"manual",ownerId:null,dueDay,priority:"normal",status:"planned",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+  const task={id:"task-"+crypto.randomUUID(),title,objectId:object?.id||null,source:"manual",ownerId:null,dueDay,priority:"normal",status:"planned",workAction:"general",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
   state.tasks.push(task);$("task-title").value="";renderTasks();renderSelected();scheduleSave();toast("Задача добавлена без обращения к Ollama.");
 }
 async function sendChat(){
@@ -113,7 +132,7 @@ async function init(){
   // Ollama may be started after the game. Recheck periodically and recover without a page reload.
   setInterval(checkOllama,12000);
 
-  renderer=new WorldRenderer($("world-canvas"),$("world-viewport"),selectObject,()=>{});renderer.addObjects(state.objects);
+  renderer=new WorldRenderer($("world-canvas"),$("world-viewport"),selectObject,()=>{});renderer.addObjects(state.objects);syncVisibleCharacters();
   $("zoom-in").addEventListener("click",()=>renderer.zoomIn());$("zoom-out").addEventListener("click",()=>renderer.zoomOut());$("reset-view").addEventListener("click",()=>renderer.reset());
   $("add-task").addEventListener("click",()=>{$("task-title").focus();$("task-title").scrollIntoView({behavior:"smooth",block:"center"});});
   $("create-task").addEventListener("click",newTask);$("task-title").addEventListener("keydown",e=>{if(e.key==="Enter")newTask();});
