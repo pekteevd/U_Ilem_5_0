@@ -1,4 +1,4 @@
-import {WORLD_OBJECTS,createInitialState} from "./world-data.js";
+import {WORLD_OBJECTS,createInitialState,migrateState} from "./world-data.js";
 import {WorldRenderer} from "./world-renderer.js";
 import {loadState,saveState,saveLocalSnapshot,exportState} from "./persistence.js";
 
@@ -319,15 +319,10 @@ async function checkOllama(){
   catch{ollamaReady=false;$("ollama-status").textContent="Ollama не подключена";$("ollama-status-side").textContent="не подключена";}
 }
 async function init(){
-  const loaded=await loadState();if(loaded.state)state=loaded.state;
-  if(!Array.isArray(state.buildStages))state.buildStages=createInitialState().buildStages;
-  if(!Array.isArray(state.movements))state.movements=[];
-  if(!Array.isArray(state.transactions))state.transactions=[];
-  // Preserve saved character data, but restore canonical team members missing from older saves.
-  const defaults=createInitialState().characters;
-  const saved=Array.isArray(state.characters)?state.characters:[];
-  state.characters=[...saved];
-  for(const person of defaults){if(!state.characters.some(x=>x.id===person.id))state.characters.push({...person});}
+  const loaded=await loadState();
+  const migration=migrateState(loaded.state||state);
+  state=migration.state;
+  if(migration.migrated)scheduleSave();
 
   renderHeader();renderTasks();renderSelected();renderTabs();
   $("local-status").textContent="готово";$("server-status").textContent=loaded.source==="server"?"загружено":"ожидание";
