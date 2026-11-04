@@ -23,7 +23,7 @@ export const WORLD_OBJECTS = [
 export function createInitialState(){
   return {
     schemaVersion:1,
-    meta:{project:"У Илем 5.0",createdAt:new Date().toISOString(),lastSavedAt:null,day:1,season:"Весна"},
+    meta:{project:"У Илем 5.0",createdAt:new Date().toISOString(),lastSavedAt:null,day:1,season:"Весна",worldMapVersion:2},
     economy:{budget:2000000,reserve:500000,currency:"RUB"},
     warehouse:[
       {id:"boards",name:"Доски",unit:"шт.",quantity:120,minimum:20},
@@ -53,12 +53,13 @@ export function createInitialState(){
 export function migrateState(saved){
   if(!saved||typeof saved!=="object")return {state:createInitialState(),migrated:false};
   const state=saved,defaults=createInitialState();
+  const savedWorldMapVersion=Number(state.meta?.worldMapVersion)||0;
   let migrated=false;
   const fill=(target,key,value)=>{
     if(target[key]===undefined||(target[key]===null&&value!==null)){target[key]=value;migrated=true;}
   };
   if(!state.meta||typeof state.meta!=="object"){state.meta={...defaults.meta};migrated=true;}
-  else ["project","createdAt","lastSavedAt","day","season"].forEach(key=>fill(state.meta,key,defaults.meta[key]));
+  else ["project","createdAt","lastSavedAt","day","season","worldMapVersion"].forEach(key=>fill(state.meta,key,defaults.meta[key]));
   if(!state.economy||typeof state.economy!=="object"){state.economy={...defaults.economy};migrated=true;}
   else ["budget","reserve","currency"].forEach(key=>fill(state.economy,key,defaults.economy[key]));
   if(!Array.isArray(state.warehouse)){state.warehouse=defaults.warehouse.map(item=>({...item}));migrated=true;}
@@ -71,6 +72,24 @@ export function migrateState(saved){
   ["objects","tasks","movements","transactions"].forEach(key=>{
     if(!Array.isArray(state[key])){state[key]=[];migrated=true;}
   });
+  if(savedWorldMapVersion<2){
+    const previousObjects=state.objects;
+    const knownIds=new Set(defaults.objects.map(object=>object.id));
+    state.objects=defaults.objects.map(base=>{
+      const existing=previousObjects.find(object=>object&&object.id===base.id);
+      if(!existing)return {...base,position:{...base.position},dimensions:{...base.dimensions},state:{...base.state},history:[]};
+      return {
+        ...base,
+        ...existing,
+        type:base.type,
+        zone:base.zone,
+        position:{...base.position},
+        dimensions:{...base.dimensions}
+      };
+    }).concat(previousObjects.filter(object=>object&& !knownIds.has(object.id)));
+    state.meta.worldMapVersion=2;
+    migrated=true;
+  }
   if(!Array.isArray(state.buildStages)){state.buildStages=defaults.buildStages;migrated=true;}
   if(!Array.isArray(state.characters)){state.characters=defaults.characters;migrated=true;}
   else defaults.characters.forEach(person=>{
