@@ -44,7 +44,7 @@ export function migrateState(saved){
   const state=saved,defaults=createInitialState();
   let migrated=false;
   const fill=(target,key,value)=>{
-    if(target[key]===undefined||target[key]===null){target[key]=value;migrated=true;}
+    if(target[key]===undefined||(target[key]===null&&value!==null)){target[key]=value;migrated=true;}
   };
   if(!state.meta||typeof state.meta!=="object"){state.meta={...defaults.meta};migrated=true;}
   else ["project","createdAt","lastSavedAt","day","season"].forEach(key=>fill(state.meta,key,defaults.meta[key]));
