@@ -52,7 +52,8 @@ export function saveLocalSnapshot(state){
   if(!valid(state))return {ok:false,local:false,error:"invalid_state_schema"};
   const savedAt=new Date().toISOString();
   if(state.meta)state.meta.lastSavedAt=savedAt;
-  return {ok:storeLocalSnapshot(state,savedAt).local,local:storeLocalSnapshot(state,savedAt).local,savedAt};
+  const result=storeLocalSnapshot(state,savedAt);
+  return {ok:result.local,local:result.local,savedAt};
 }
 
 export async function saveState(state){
