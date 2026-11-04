@@ -1,6 +1,7 @@
 import { chromium } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
+import { WORLD_OBJECTS, WORLD_MAP_CONFIG } from "../world-data.js";
 
 const out = path.resolve("artifacts");
 fs.mkdirSync(out, { recursive: true });
@@ -23,7 +24,7 @@ const mapResponses = [];
 
 page.on("pageerror", error => errors.push("pageerror: " + error.message));
 page.on("console", message => {
-  if (message.type() === "error") errors.push("console: " + message.text());
+  if (message.type() === "error" && !message.text().includes("favicon.ico")) errors.push("console: " + message.text());
 });
 page.on("requestfailed", request => failedRequests.push({
   url: request.url(),
@@ -78,16 +79,50 @@ try {
   await page.click("#zoom-in");
   await page.click("#zoom-out");
   await page.click("#reset-view");
+
+  const objectSelections = [];
+  const viewportRect = await page.locator("#world-viewport").boundingBox();
+  const imageSize = await page.evaluate(async file => {
+    const image = new Image();
+    image.src = "./" + file;
+    await image.decode();
+    return { width: image.naturalWidth, height: image.naturalHeight };
+  }, WORLD_MAP_CONFIG.file);
+  const mapWidth = WORLD_MAP_CONFIG.worldWidth;
+  const mapHeight = mapWidth / (imageSize.width / imageSize.height);
+  const cameraAspect = viewportRect.width / viewportRect.height;
+  const viewHeight = Math.max(mapHeight * 1.12, mapWidth / cameraAspect * 1.12);
+  const viewWidth = viewHeight * cameraAspect;
+  const cameraLength = Math.hypot(100, 36.4);
+  const cameraUpY = 36.4 / cameraLength;
+  const cameraUpZ = -100 / cameraLength;
+
+  for (const object of WORLD_OBJECTS) {
+    const worldX = (object.position.x - 0.5) * mapWidth;
+    const worldZ = (object.position.y - 0.5) * mapHeight;
+    const projectedUp = cameraUpY * 0.04 + cameraUpZ * worldZ;
+    const screenX = viewportRect.x + (0.5 + worldX / viewWidth) * viewportRect.width;
+    const screenY = viewportRect.y + (0.5 - projectedUp / viewHeight) * viewportRect.height;
+    await page.mouse.click(screenX, screenY);
+    await page.waitForFunction(
+      name => document.querySelector("#selected-object")?.textContent?.includes(name),
+      object.name,
+      { timeout: 3000 }
+    );
+    objectSelections.push(object.name);
+  }
+
   await page.click('[data-tab="construction"]');
   const constructionTabVisible = await page.locator("#tab-title").textContent();
   await page.click('[data-tab="overview"]');
 
   const report = {
-    result: errors.length === 0 && failedRequests.length === 0 ? "PASS" : "FAIL",
+    result: errors.length === 0 && failedRequests.length === 0 && objectSelections.length === WORLD_OBJECTS.length ? "PASS" : "FAIL",
     pageStatus: response.status(),
     scene,
     mapResponses,
     constructionTabVisible,
+    objectSelections,
     consoleAndPageErrors: errors,
     failedRequests
   };
@@ -95,7 +130,7 @@ try {
   fs.writeFileSync(path.join(out, "report.json"), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
 
-  if (errors.length || failedRequests.length) process.exitCode = 1;
+  if (errors.length || failedRequests.length || objectSelections.length !== WORLD_OBJECTS.length) process.exitCode = 1;
 } catch (error) {
   fs.writeFileSync(path.join(out, "failure.txt"), String(error?.stack || error));
   console.error(error);
