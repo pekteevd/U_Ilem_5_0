@@ -26,7 +26,9 @@ export function createInitialState(){
     objects:WORLD_OBJECTS.map(o=>({...o,state:{condition:o.status==="Действующий источник"?"Работает":"Не оценено"},history:[]})),
     characters:[
       {id:"dmitry",name:"Дмитрий",role:"Координатор",energy:100,skills:{construction:2,woodwork:2,ecology:1}},
-      {id:"tatiana",name:"Татьяна",role:"Участник команды",energy:100,skills:{hospitality:2,ecology:1}}
+      {id:"tatiana",name:"Татьяна",role:"Участник команды",energy:100,skills:{hospitality:2,ecology:1}},
+      {id:"alexey",name:"Алексей",role:"Мастерские и техника",energy:100,skills:{construction:2,woodwork:2,mechanics:2}},
+      {id:"sergey",name:"Сергей",role:"Хозяйство и помощь",energy:100,skills:{construction:1,maintenance:2,logistics:1}}
     ],
     tasks:[],
     movements:[],
