@@ -38,4 +38,34 @@ export function createInitialState(){
   };
 }
 
-// Save migration helpers are maintained alongside the canonical world schema.
+
+export function migrateState(saved){
+  if(!saved||typeof saved!=="object")return {state:createInitialState(),migrated:false};
+  const state=saved,defaults=createInitialState();
+  let migrated=false;
+  const fill=(target,key,value)=>{
+    if(target[key]===undefined||target[key]===null){target[key]=value;migrated=true;}
+  };
+  if(!state.meta||typeof state.meta!=="object"){state.meta={...defaults.meta};migrated=true;}
+  else ["project","createdAt","lastSavedAt","day","season"].forEach(key=>fill(state.meta,key,defaults.meta[key]));
+  if(!state.economy||typeof state.economy!=="object"){state.economy={...defaults.economy};migrated=true;}
+  else ["budget","reserve","currency"].forEach(key=>fill(state.economy,key,defaults.economy[key]));
+  if(!Array.isArray(state.warehouse)){state.warehouse=defaults.warehouse.map(item=>({...item}));migrated=true;}
+  else state.warehouse.forEach(item=>{
+    if(!item||typeof item!=="object")return;
+    const standard=defaults.warehouse.find(entry=>entry.id===item.id);
+    fill(item,"minimum",standard?.minimum??0);
+    if(standard){fill(item,"name",standard.name);fill(item,"unit",standard.unit);}
+  });
+  ["objects","tasks","movements","transactions"].forEach(key=>{
+    if(!Array.isArray(state[key])){state[key]=[];migrated=true;}
+  });
+  if(!Array.isArray(state.buildStages)){state.buildStages=defaults.buildStages;migrated=true;}
+  if(!Array.isArray(state.characters)){state.characters=defaults.characters;migrated=true;}
+  else defaults.characters.forEach(person=>{
+    if(!state.characters.some(existing=>existing&&existing.id===person.id)){state.characters.push({...person});migrated=true;}
+  });
+  if(!state.settings||typeof state.settings!=="object"){state.settings={...defaults.settings};migrated=true;}
+  else Object.keys(defaults.settings).forEach(key=>fill(state.settings,key,defaults.settings[key]));
+  return {state,migrated};
+}
