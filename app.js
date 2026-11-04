@@ -71,8 +71,57 @@ function createTaskFromStage(stageId){
   state.tasks.push(task);stage.taskId=task.id;scheduleSave();renderTasks();renderSelected();renderTab();toast("Этап добавлен на общую доску задач.");
 }
 function selectObject(id){selectedId=id;renderSelected();renderTab();}
-function processWarehouseForm(form){const item=state.warehouse.find(x=>x.id===form.elements.item.value),action=form.elements.action.value,qty=Number(form.elements.quantity.value),price=Number(form.elements.unitCost.value)||0;if(!item||!Number.isFinite(qty)||qty<=0){toast("Укажи корректное количество.");return;}let total=0;if(action==="purchase"){total=Math.round(qty*price);if(price<=0){toast("Укажи цену закупки.");return;}if(total>state.economy.budget){toast("Недостаточно средств. Резерв не затрагивается.");return;}item.quantity+=qty;state.economy.budget-=total;state.transactions.unshift({id:"txn-"+crypto.randomUUID(),type:"expense",description:"Закупка: "+item.name,amount:total,createdAt:new Date().toISOString()});}else{if(qty>item.quantity){toast("Недостаточно материала на складе.");return;}item.quantity-=qty;}state.movements.unshift({id:"mov-"+crypto.randomUUID(),itemId:item.id,itemName:item.name,type:action==="purchase"?"in":"out",quantity:qty,unit:item.unit,total,createdAt:new Date().toISOString()});scheduleSave();renderHeader();renderTab();toast("Операция склада проведена.");}
-function processFinanceForm(form){const type=form.elements.type.value,amount=Math.round(Number(form.elements.amount.value)),description=form.elements.description.value.trim();if(!Number.isFinite(amount)||amount<=0||!description){toast("Проверь сумму и назначение.");return;}if(type==="expense"&&amount>state.economy.budget){toast("Недостаточно средств. Резерв защищён.");return;}if(type==="expense")state.economy.budget-=amount;else state.economy.budget+=amount;state.transactions.unshift({id:"txn-"+crypto.randomUUID(),type,description,amount,createdAt:new Date().toISOString(),source:"manual"});scheduleSave();renderHeader();renderTab();toast("Финансовая операция записана.");}
+function processWarehouseForm(form){
+  const item=(state.warehouse||[]).find(x=>x.id===form.elements.item.value);
+  const action=form.elements.action.value;
+  const rawQty=String(form.elements.quantity.value??"").trim();
+  const qty=Number(rawQty);
+  const rawPrice=String(form.elements.unitCost.value??"").trim();
+  const price=Number(rawPrice);
+  const budget=Number(state.economy?.budget);
+  if(!item||!["purchase","use"].includes(action)||!rawQty||!Number.isFinite(qty)||qty<=0||Math.round(qty*100)!==qty*100){
+    toast("Укажи корректное количество (до двух знаков после запятой).");return;
+  }
+  const stock=Number(item.quantity);
+  if(!Number.isFinite(stock)||stock<0){toast("Остаток материала повреждён. Операция отменена.");return;}
+  let total=0,nextQuantity=0,nextBudget=budget,transaction=null;
+  if(action==="purchase"){
+    if(!rawPrice||!Number.isSafeInteger(price)||price<=0){toast("Цена за единицу должна быть целым числом рублей.");return;}
+    total=Math.round(qty*price);
+    if(!Number.isSafeInteger(total)||total<=0){toast("Итоговая стоимость закупки некорректна.");return;}
+    if(!Number.isSafeInteger(budget)||budget<0||total>budget){toast("Недостаточно средств. Неприкосновенный резерв не используется.");return;}
+    nextQuantity=Math.round((stock+qty)*100)/100;
+    nextBudget=budget-total;
+    if(!Number.isFinite(nextQuantity)||nextQuantity<stock){toast("Количество после закупки выходит за допустимый диапазон.");return;}
+    transaction={id:"txn-"+crypto.randomUUID(),type:"expense",description:"Закупка: "+item.name,amount:total,createdAt:new Date().toISOString(),source:"warehouse"};
+  }else{
+    if(qty>stock){toast("Недостаточно материала на складе.");return;}
+    nextQuantity=Math.round((stock-qty)*100)/100;
+  }
+  const movement={id:"mov-"+crypto.randomUUID(),itemId:item.id,itemName:item.name,type:action==="purchase"?"in":"out",quantity:qty,unit:item.unit,total,createdAt:new Date().toISOString(),source:action==="purchase"?"purchase":"manual-use"};
+  item.quantity=nextQuantity;
+  if(action==="purchase"){state.economy.budget=nextBudget;state.transactions=[transaction,...(state.transactions||[])];}
+  state.movements=[movement,...(state.movements||[])];
+  scheduleSave();renderHeader();renderTab();toast(action==="purchase"?"Закупка проведена, склад и финансы обновлены.":"Материал списан со склада.");
+}
+function processFinanceForm(form){
+  const type=form.elements.type.value;
+  const rawAmount=String(form.elements.amount.value??"").trim();
+  const amount=Number(rawAmount);
+  const description=String(form.elements.description.value??"").trim();
+  const budget=Number(state.economy?.budget);
+  if(!["expense","income"].includes(type)||!rawAmount||!Number.isSafeInteger(amount)||amount<=0||!description){
+    toast("Сумма должна быть целым положительным числом рублей. Проверь назначение.");return;
+  }
+  if(!Number.isSafeInteger(budget)||budget<0){toast("Текущий бюджет некорректен. Операция отменена.");return;}
+  if(type==="expense"&&amount>budget){toast("Недостаточно средств. Неприкосновенный резерв защищён.");return;}
+  const nextBudget=type==="expense"?budget-amount:budget+amount;
+  if(!Number.isSafeInteger(nextBudget)||nextBudget<0){toast("Операция выводит бюджет за допустимый диапазон.");return;}
+  const transaction={id:"txn-"+crypto.randomUUID(),type,description,amount,createdAt:new Date().toISOString(),source:"manual"};
+  state.economy.budget=nextBudget;
+  state.transactions=[transaction,...(state.transactions||[])];
+  scheduleSave();renderHeader();renderTab();toast("Финансовая операция записана.");
+}
 function stageMaterialRow(stageId,req={},index=0,locked=false){return `<div class="stage-material-row"><label>Материал<select name="material"><option value="">Не выбран</option>${state.warehouse.map(r=>`<option value="${esc(r.id)}" ${req.itemId===r.id?"selected":""}>${esc(r.name)} (${esc(r.unit)})</option>`).join("")}</select></label><label>Количество<input name="quantity" type="number" min="0" step="0.01" value="${req.quantity||0}" placeholder="Количество"></label>${locked?"":`<button type="button" class="remove-material" data-remove-material="${esc(stageId)}" aria-label="Удалить материал">Удалить</button>`}</div>`;}
 function saveStageConfig(form){const stage=state.buildStages.find(x=>x.id===form.dataset.stageConfig);if(!stage||stage.status==="done"){toast("Принятый этап нельзя редактировать.");return;}const materials=[];for(const row of form.querySelectorAll(".stage-material-row")){const itemId=row.querySelector('[name="material"]').value,raw=row.querySelector('[name="quantity"]').value,quantity=Number(raw);if(!Number.isFinite(quantity)||quantity<0){toast("Проверь количество материалов.");return;}if(itemId&&quantity>0){const existing=materials.find(x=>x.itemId===itemId);if(existing)existing.quantity+=quantity;else materials.push({itemId,quantity});}else if(!itemId&&quantity>0){toast("Для каждой позиции с количеством выбери материал.");return;}}const cost=Number(form.elements.cost.value),hours=Number(form.elements.hours.value);if(!Number.isFinite(cost)||cost<0||!Number.isInteger(cost)||!Number.isFinite(hours)||hours<0){toast("Проверь стоимость и трудозатраты.");return;}stage.requiredMaterials=materials;stage.cost=cost;stage.workHours=hours;scheduleSave();renderTab();toast("Смета этапа сохранена.");}
 function addStageMaterial(stageId){const form=document.querySelector('[data-stage-config="'+CSS.escape(stageId)+'"]');if(!form||form.dataset.locked==="true")return;const grid=form.querySelector(".stage-material-grid");const holder=document.createElement("div");holder.innerHTML=stageMaterialRow(stageId,{},grid.children.length,false);const row=holder.firstElementChild;row.querySelector("[data-remove-material]")?.addEventListener("click",()=>removeStageMaterial(row.querySelector("[data-remove-material]")));grid.append(row);}
