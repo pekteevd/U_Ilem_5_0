@@ -13,7 +13,7 @@ export class WorldRenderer{
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;
     this.raycaster=new THREE.Raycaster();this.pointer=new THREE.Vector2();
     this.pickables=[];this.objectGroups=new Map();this.characterGroups=new Map();this.target=new THREE.Vector3(0,0,0);
-    this.drag=null;this.mapAspect=1;this.mapWidth=WORLD_MAP_CONFIG.worldWidth;this.mapHeight=this.mapWidth/(1648/928);this.flameEffects=[];
+    this.drag=null;this.mapAspect=1;this.mapWidth=WORLD_MAP_CONFIG.worldWidth;this.mapHeight=this.mapWidth;this.flameEffects=[];
     this.addLights();this.loadMap();this.bindControls();this.resize();
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(viewport);
     this.animate=this.animate.bind(this);requestAnimationFrame(this.animate);
