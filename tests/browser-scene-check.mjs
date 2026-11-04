@@ -1,10 +1,40 @@
 import { chromium } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
-import { WORLD_OBJECTS, WORLD_MAP_CONFIG } from "../world-data.js";
+import { WORLD_OBJECTS, WORLD_MAP_CONFIG, createInitialState, migrateState } from "../world-data.js";
 
 const out = path.resolve("artifacts");
 fs.mkdirSync(out, { recursive: true });
+
+const migrationSource = createInitialState();
+migrationSource.meta.worldMapVersion = 3;
+migrationSource.objects[0].position = { x: 0.48, y: 0.49 };
+migrationSource.objects[0].state = { condition: "Проверенное состояние" };
+migrationSource.objects[0].history = [{ id: "history-preserve" }];
+migrationSource.objects.push({
+  id: "custom-test-object",
+  name: "Пользовательский объект",
+  type: "custom",
+  position: { x: 0.12, y: 0.15 },
+  dimensions: { w: 1, d: 1, h: 1 },
+  state: {},
+  history: []
+});
+const migrationResult = migrateState(migrationSource);
+const migratedHouse = migrationResult.state.objects.find(object => object.id === "house-main");
+const migrationTest = {
+  passed: migrationResult.migrated &&
+    migrationResult.state.meta.worldMapVersion === 4 &&
+    migratedHouse.position.x === WORLD_OBJECTS[0].position.x &&
+    migratedHouse.position.y === WORLD_OBJECTS[0].position.y &&
+    migratedHouse.state.condition === "Проверенное состояние" &&
+    migratedHouse.history[0]?.id === "history-preserve" &&
+    migrationResult.state.objects.some(object => object.id === "custom-test-object"),
+  version: migrationResult.state.meta.worldMapVersion,
+  customObjectPreserved: migrationResult.state.objects.some(object => object.id === "custom-test-object"),
+  dynamicStatePreserved: migratedHouse.state.condition === "Проверенное состояние"
+};
+if (!migrationTest.passed) throw new Error("Миграция worldMapVersion 3 → 4 не прошла проверку");
 
 const browser = await chromium.launch({
   headless: true,
@@ -123,6 +153,33 @@ try {
   const viewHeight = Math.max(mapHeight * Math.abs(cameraUpZ) * 1.12, mapWidth / cameraAspect * 1.12);
   const viewWidth = viewHeight * cameraAspect;
 
+  const footprints = WORLD_OBJECTS.map(object => {
+    const centerX = (object.position.x - 0.5) * mapWidth;
+    const centerZ = (object.position.y - 0.5) * mapHeight;
+    return {
+      id: object.id,
+      left: centerX - object.dimensions.w / 2,
+      right: centerX + object.dimensions.w / 2,
+      top: centerZ - object.dimensions.d / 2,
+      bottom: centerZ + object.dimensions.d / 2
+    };
+  });
+  const outOfBounds = footprints.filter(box =>
+    box.left < -mapWidth / 2 || box.right > mapWidth / 2 ||
+    box.top < -mapHeight / 2 || box.bottom > mapHeight / 2
+  ).map(box => box.id);
+  const overlaps = [];
+  for (let i = 0; i < footprints.length; i++) {
+    for (let j = i + 1; j < footprints.length; j++) {
+      const a = footprints[i], b = footprints[j];
+      if (a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top) {
+        overlaps.push([a.id, b.id]);
+      }
+    }
+  }
+  const footprintCheck = { passed: outOfBounds.length === 0 && overlaps.length === 0, outOfBounds, overlaps };
+  if (!footprintCheck.passed) throw new Error("Габариты объектов выходят за карту или пересекаются: " + JSON.stringify(footprintCheck));
+
   for (const object of WORLD_OBJECTS) {
     const worldX = (object.position.x - 0.5) * mapWidth;
     const worldZ = (object.position.y - 0.5) * mapHeight;
@@ -143,12 +200,14 @@ try {
   await page.click('[data-tab="overview"]');
 
   const report = {
-    result: errors.length === 0 && failedRequests.length === 0 && httpErrors.length === 0 && objectSelections.length === WORLD_OBJECTS.length ? "PASS" : "FAIL",
+    result: errors.length === 0 && failedRequests.length === 0 && httpErrors.length === 0 && objectSelections.length === WORLD_OBJECTS.length && migrationTest.passed && footprintCheck.passed ? "PASS" : "FAIL",
     pageStatus: response.status(),
     scene,
     mapResponses,
     constructionTabVisible,
     objectSelections,
+    migrationTest,
+    footprintCheck,
     httpErrors,
     consoleAndPageErrors: errors,
     failedRequests
@@ -157,7 +216,7 @@ try {
   fs.writeFileSync(path.join(out, "report.json"), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
 
-  if (errors.length || failedRequests.length || httpErrors.length || objectSelections.length !== WORLD_OBJECTS.length) process.exitCode = 1;
+  if (errors.length || failedRequests.length || httpErrors.length || objectSelections.length !== WORLD_OBJECTS.length || !migrationTest.passed || !footprintCheck.passed) process.exitCode = 1;
 } catch (error) {
   fs.writeFileSync(path.join(out, "failure.txt"), String(error?.stack || error));
   console.error(error);
