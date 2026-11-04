@@ -364,7 +364,6 @@ export class WorldRenderer{
       bucket.position.set(0,.78,0);group.add(bucket);
       this.addGableRoof(group,w*.98,d*.98,postTop+.04,h*.16,roof,.08);
     }
-    }
     const marker=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,.08,12),warm);
     marker.position.set(0,.09,0);marker.userData.objectId=o.id;group.add(marker);
   }
