@@ -41,14 +41,14 @@ function renderTasks(){
     const peopleOptions=ownerId=>'<option value="">Не назначен</option>'+state.characters.map(c=>'<option value="'+esc(c.id)+'" '+(ownerId===c.id?'selected':'')+'>'+esc(c.name)+'</option>').join("");
     $("task-list").innerHTML=state.tasks.map(t=>{
       const objectName=state.objects.find(o=>o.id===t.objectId)?.name||"Общая задача";
-      return '<div class="task-card"><div class="task-main"><b>'+esc(t.title)+'</b><small>'+esc(objectName)+' · день '+t.dueDay+'</small>'+(t.stageId?'<label class="actual-hours">Фактически затрачено, ч <input data-task-actual-hours="'+esc(t.id)+'" type="number" min="0" step="0.5" '+((state.buildStages||[]).some(x=>x.id===t.stageId&&x.status==="done")?"disabled":"")+' value="'+(t.actualHours??"")+'" placeholder="Внести после работы"></label>':'')+'<div class="task-controls"><label>Исполнитель <select data-task-owner="'+esc(t.id)+'">'+peopleOptions(t.ownerId)+'</select></label><label>Статус <select data-task-status="'+esc(t.id)+'"><option value="planned" '+(t.status==="planned"?"selected":"")+'>Запланирована</option><option value="in_progress" '+(t.status==="in_progress"?"selected":"")+'>В работе</option><option value="blocked" '+(t.status==="blocked"?"selected":"")+'>Заблокирована</option><option value="done" '+(t.status==="done"?"selected":"")+'>Завершена</option></select></label></div></div></div>';
+      return '<div class="task-card"><div class="task-main"><b>'+esc(t.title)+'</b><small>'+esc(objectName)+' · день '+t.dueDay+'</small>'+(t.stageId?'<label class="actual-hours">Фактически затрачено, ч <input data-task-actual-hours="'+esc(t.id)+'" type="number" min="0.5" step="0.5" '+((state.buildStages||[]).some(x=>x.id===t.stageId&&x.status==="done")?"disabled":"")+' value="'+(t.actualHours??"")+'" placeholder="Внести после работы"></label>':'')+'<div class="task-controls"><label>Исполнитель <select data-task-owner="'+esc(t.id)+'">'+peopleOptions(t.ownerId)+'</select></label><label>Статус <select data-task-status="'+esc(t.id)+'"><option value="planned" '+(t.status==="planned"?"selected":"")+'>Запланирована</option><option value="in_progress" '+(t.status==="in_progress"?"selected":"")+'>В работе</option><option value="blocked" '+(t.status==="blocked"?"selected":"")+'>Заблокирована</option><option value="done" '+(t.status==="done"?"selected":"")+'>Завершена</option></select></label></div></div></div>';
     }).join("");
     $("calendar-list").innerHTML=[...state.tasks].sort((a,b)=>a.dueDay-b.dueDay).map(t=>'<div class="task-card"><div class="task-main"><b>День '+t.dueDay+': '+esc(t.title)+'</b><small>'+esc(state.objects.find(o=>o.id===t.objectId)?.name||"Общая задача")+'</small></div></div>').join("");
     document.querySelectorAll("[data-task-status]").forEach(el=>el.addEventListener("change",()=>{
       const t=state.tasks.find(x=>x.id===el.dataset.taskStatus);
       if(t){const stage=(state.buildStages||[]).find(x=>x.id===t.stageId);if(stage?.status==="done"&&el.value!=="done"){toast("Принятый этап нельзя откатить через статус задачи.");renderTasks();return;}if(el.value==="in_progress"&&t.ownerId&&state.tasks.some(x=>x.id!==t.id&&x.ownerId===t.ownerId&&x.status==="in_progress")){toast("Этот участник уже выполняет другую задачу.");renderTasks();return;}t.status=el.value;t.updatedAt=new Date().toISOString();if(stage&&stage.status!=="done"){stage.status=el.value==="done"?"ready":el.value==="in_progress"?"in_progress":el.value==="blocked"?"blocked":"planned";stage.progress=el.value==="done"?90:el.value==="in_progress"?50:0;}scheduleSave();renderTasks();renderSelected();renderTab();}
     }));
-    document.querySelectorAll("[data-task-actual-hours]").forEach(el=>el.addEventListener("change",()=>{const task=state.tasks.find(x=>x.id===el.dataset.taskActualHours);const hours=Number(el.value);if(!task||task.status!=="done"){toast("Фактические часы можно внести после завершения задачи.");renderTasks();return;}if(!Number.isFinite(hours)||hours<0){toast("Укажи корректные фактические часы.");renderTasks();return;}task.actualHours=hours;task.updatedAt=new Date().toISOString();scheduleSave();}));
+    document.querySelectorAll("[data-task-actual-hours]").forEach(el=>el.addEventListener("change",()=>{const task=state.tasks.find(x=>x.id===el.dataset.taskActualHours);const hours=Number(el.value);if(!task||task.status!=="done"){toast("Фактические часы можно внести после завершения задачи.");renderTasks();return;}if(!Number.isFinite(hours)||hours<=0){toast("Укажи фактические часы больше нуля.");renderTasks();return;}task.actualHours=hours;task.updatedAt=new Date().toISOString();scheduleSave();}));
     document.querySelectorAll("[data-task-owner]").forEach(el=>el.addEventListener("change",()=>{
       const t=state.tasks.find(x=>x.id===el.dataset.taskOwner);
       if(t){const linkedStage=(state.buildStages||[]).find(x=>x.id===t.stageId);if(t.status==="done"||linkedStage?.status==="done"){toast("После завершения задачи исполнитель зафиксирован.");renderTasks();return;}const nextOwner=el.value||null;if(t.status==="in_progress"&&nextOwner&&state.tasks.some(x=>x.id!==t.id&&x.ownerId===nextOwner&&x.status==="in_progress")){toast("Этот участник уже выполняет другую задачу.");renderTasks();return;}t.ownerId=nextOwner;t.updatedAt=new Date().toISOString();scheduleSave();syncVisibleCharacters();renderSelected();}
@@ -78,7 +78,97 @@ function saveStageConfig(form){const stage=state.buildStages.find(x=>x.id===form
 function addStageMaterial(stageId){const form=document.querySelector('[data-stage-config="'+CSS.escape(stageId)+'"]');if(!form||form.dataset.locked==="true")return;const grid=form.querySelector(".stage-material-grid");const holder=document.createElement("div");holder.innerHTML=stageMaterialRow(stageId,{},grid.children.length,false);const row=holder.firstElementChild;row.querySelector("[data-remove-material]")?.addEventListener("click",()=>removeStageMaterial(row.querySelector("[data-remove-material]")));grid.append(row);}
 function removeStageMaterial(button){const row=button.closest(".stage-material-row");if(row)row.remove();}
 
-function acceptBuildStage(stageId){const stage=state.buildStages.find(x=>x.id===stageId),task=stage&&state.tasks.find(t=>t.id===stage.taskId),object=stage&&state.objects.find(o=>o.id===stage.objectId);if(!stage||!task||task.status!=="done"||!object){toast("Сначала заверши связанную задачу и проверь объект.");return;}if(stage.status==="done"||stage.acceptedAt){toast("Этот этап уже принят.");return;}const actualHours=Number(task.actualHours);if(!Number.isFinite(actualHours)||actualHours<=0){toast("Перед приёмкой внеси фактически затраченные часы в карточке задачи.");return;}const requirements=(stage.requiredMaterials||[]).map(req=>({itemId:req.itemId,quantity:Number(req.quantity)}));const deductions=[];for(const req of requirements){const item=state.warehouse.find(x=>x.id===req.itemId);if(!item||!Number.isFinite(req.quantity)||req.quantity<=0||!Number.isFinite(item.quantity)||item.quantity<req.quantity){toast("Недостаточно материала: "+(item?.name||"неизвестный материал")+".");return;}deductions.push({item,quantity:req.quantity});}const cost=Number(stage.cost||0);if(!Number.isFinite(cost)||cost<0||!Number.isInteger(cost)||cost>state.economy.budget){toast("Недостаточно бюджета или некорректная стоимость. Резерв не используется.");return;}const now=new Date().toISOString(),movementRows=deductions.map(({item,quantity})=>({id:"mov-"+crypto.randomUUID(),itemId:item.id,itemName:item.name,type:"out",quantity,unit:item.unit,total:0,source:"construction",stageId:stage.id,createdAt:now})),transaction=cost?{id:"txn-"+crypto.randomUUID(),type:"expense",description:"Работы: "+stage.title,amount:cost,source:"construction",stageId:stage.id,createdAt:now}:null,historyEntry={date:now,event:"Принят этап: "+stage.title,cost,materials:requirements.map(req=>({...req}))};const worker=task.ownerId?state.characters.find(c=>c.id===task.ownerId):null;deductions.forEach(({item,quantity})=>{item.quantity-=quantity;});state.movements=[...movementRows,...(state.movements||[])];if(transaction){state.economy.budget-=cost;state.transactions=[transaction,...(state.transactions||[])];}stage.status="done";stage.progress=100;stage.acceptedAt=now;stage.actualHours=actualHours;task.hoursRecorded=true;if(worker){worker.workedHours=(worker.workedHours||0)+actualHours;worker.completedTasks=(worker.completedTasks||0)+1;}object.state=object.state||{};object.state.condition="Работы выполнены";object.history=object.history||[];object.history.unshift(historyEntry);scheduleSave();renderHeader();renderTasks();renderSelected();renderTab();toast("Работы приняты. Материалы и расходы учтены.");}
+function acceptBuildStage(stageId){
+  const stage=(state.buildStages||[]).find(x=>x.id===stageId);
+  const task=stage&&(state.tasks||[]).find(t=>t.id===stage.taskId);
+  const object=stage&&(state.objects||[]).find(o=>o.id===stage.objectId);
+  if(!stage||!task||task.status!=="done"||!object){
+    toast("Сначала заверши связанную задачу и проверь объект.");
+    return;
+  }
+  if(stage.status==="done"||stage.acceptedAt){
+    toast("Этот этап уже принят.");
+    return;
+  }
+  const actualHours=Number(task.actualHours);
+  if(!Number.isFinite(actualHours)||actualHours<=0){
+    toast("Перед приёмкой внеси фактически затраченные часы больше нуля в карточке задачи.");
+    return;
+  }
+
+  // Aggregate duplicate rows before checking stock. Each row must not pass
+  // independently against the same unchanged warehouse quantity.
+  const aggregated=new Map();
+  for(const req of (Array.isArray(stage.requiredMaterials)?stage.requiredMaterials:[])){
+    const itemId=String(req?.itemId||"");
+    const quantity=Number(req?.quantity);
+    if(!itemId||!Number.isFinite(quantity)||quantity<=0){
+      toast("В смете есть некорректная позиция материала.");
+      return;
+    }
+    aggregated.set(itemId,(aggregated.get(itemId)||0)+quantity);
+  }
+  const deductions=[];
+  for(const [itemId,quantity] of aggregated){
+    const item=(state.warehouse||[]).find(x=>x.id===itemId);
+    if(!item||!Number.isFinite(Number(item.quantity))||Number(item.quantity)<quantity){
+      toast("Недостаточно материала: "+(item?.name||"неизвестный материал")+".");
+      return;
+    }
+    deductions.push({item,quantity});
+  }
+
+  const cost=Number(stage.cost??0);
+  const budget=Number(state.economy?.budget);
+  if(!Number.isFinite(cost)||cost<0||!Number.isInteger(cost)||!Number.isFinite(budget)||cost>budget){
+    toast("Недостаточно бюджета или некорректная стоимость. Резерв не используется.");
+    return;
+  }
+
+  // Prepare ledger entries before mutating any part of the state.
+  const now=new Date().toISOString();
+  const movementRows=deductions.map(({item,quantity})=>({
+    id:"mov-"+crypto.randomUUID(),itemId:item.id,itemName:item.name,
+    type:"out",quantity,unit:item.unit,total:0,source:"construction",
+    stageId:stage.id,createdAt:now
+  }));
+  const transaction=cost?{
+    id:"txn-"+crypto.randomUUID(),type:"expense",
+    description:"Работы: "+stage.title,amount:cost,
+    source:"construction",stageId:stage.id,createdAt:now
+  }:null;
+  const historyEntry={
+    date:now,event:"Принят этап: "+stage.title,cost,
+    materials:Array.from(aggregated,([itemId,quantity])=>({itemId,quantity}))
+  };
+  const worker=task.ownerId?(state.characters||[]).find(c=>c.id===task.ownerId):null;
+
+  deductions.forEach(({item,quantity})=>{item.quantity=Number(item.quantity)-quantity;});
+  state.movements=[...movementRows,...(state.movements||[])];
+  if(transaction){
+    state.economy.budget=budget-cost;
+    state.transactions=[transaction,...(state.transactions||[])];
+  }
+  stage.status="done";
+  stage.progress=100;
+  stage.acceptedAt=now;
+  stage.actualHours=actualHours;
+  task.hoursRecorded=true;
+  if(worker){
+    worker.workedHours=(Number(worker.workedHours)||0)+actualHours;
+    worker.completedTasks=(Number(worker.completedTasks)||0)+1;
+  }
+  object.state=object.state||{};
+  object.state.condition="Работы выполнены";
+  object.history=object.history||[];
+  object.history.unshift(historyEntry);
+  scheduleSave();
+  renderHeader();
+  renderTasks();
+  renderSelected();
+  renderTab();
+  toast("Работы приняты. Материалы и расходы учтены.");
+}
 function renderTab(){
   const titles={overview:["Обзор территории","состояние хозяйства"],construction:["Строительство","объекты и состояние"],warehouse:["Склад","остатки и минимальные запасы"],people:["Люди","команда и роли"],garden:["Сад","зелёная зона"],projects:["Проекты","инициативы пространства"],guests:["Гости и события","приём и календарь"],finance:["Финансы","бюджет и резерв"],chronicle:["Хроника","история изменений"],calendar:["Календарь","планирование по игровым дням"],territory:["Территория","участки и размещение"],engineering:["Инженерия","вода, электричество и отопление"],experts:["Специалисты","внешние специалисты и приглашения"]};
   $("tab-title").textContent=titles[activeTab][0];$("tab-caption").textContent=titles[activeTab][1];
