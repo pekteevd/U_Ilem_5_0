@@ -46,7 +46,7 @@ function renderTasks(){
     $("calendar-list").innerHTML=[...state.tasks].sort((a,b)=>a.dueDay-b.dueDay).map(t=>'<div class="task-card"><div class="task-main"><b>День '+t.dueDay+': '+esc(t.title)+'</b><small>'+esc(state.objects.find(o=>o.id===t.objectId)?.name||"Общая задача")+'</small></div></div>').join("");
     document.querySelectorAll("[data-task-status]").forEach(el=>el.addEventListener("change",()=>{
       const t=state.tasks.find(x=>x.id===el.dataset.taskStatus);
-      if(t){t.status=el.value;t.updatedAt=new Date().toISOString();const stage=(state.buildStages||[]).find(x=>x.id===t.stageId);if(stage){stage.status=el.value==="done"?"done":el.value==="in_progress"?"in_progress":el.value==="blocked"?"blocked":"planned";if(el.value==="done")stage.progress=100;}scheduleSave();renderTasks();renderSelected();renderTab();}
+      if(t){if(el.value==="in_progress"&&t.ownerId&&state.tasks.some(x=>x.id!==t.id&&x.ownerId===t.ownerId&&x.status==="in_progress")){toast("Этот участник уже выполняет другую задачу.");renderTasks();return;}t.status=el.value;t.updatedAt=new Date().toISOString();const stage=(state.buildStages||[]).find(x=>x.id===t.stageId);if(stage){stage.status=el.value==="done"?"done":el.value==="in_progress"?"in_progress":el.value==="blocked"?"blocked":"planned";if(el.value==="done")stage.progress=100;}scheduleSave();renderTasks();renderSelected();renderTab();}
     }));
     document.querySelectorAll("[data-task-owner]").forEach(el=>el.addEventListener("change",()=>{
       const t=state.tasks.find(x=>x.id===el.dataset.taskOwner);
@@ -57,6 +57,12 @@ function renderTasks(){
 }
 function syncVisibleCharacters(){
   if(renderer?.syncCharacters)renderer.syncCharacters(state.characters,state.tasks,state.objects);
+}
+function addStageForSelected(){
+  const o=selectedObject();if(!o){toast("Выбери объект на карте перед добавлением этапа.");return;}
+  const title=window.prompt("Название этапа работ", "Новый этап: "+o.name);if(!title||!title.trim())return;
+  const stage={id:"stage-"+crypto.randomUUID(),objectId:o.id,title:title.trim(),description:"Уточнить состав и результат работ.",status:"planned",progress:0,workHours:4,cost:0,requiredMaterials:[],taskId:null};
+  state.buildStages=state.buildStages||[];state.buildStages.push(stage);scheduleSave();renderSelected();renderTab();toast("Этап добавлен.");
 }
 function createTaskFromStage(stageId){
   const stage=(state.buildStages||[]).find(s=>s.id===stageId);if(!stage||stage.taskId)return;
@@ -69,7 +75,7 @@ function renderTab(){
   $("tab-title").textContent=titles[activeTab][0];$("tab-caption").textContent=titles[activeTab][1];
   let html="";
   if(activeTab==="overview")html=`<div class="tab-summary"><div class="summary-chip"><b>${state.objects.length}</b><small>объектов на карте</small></div><div class="summary-chip"><b>${state.tasks.length}</b><small>задач в работе</small></div><div class="summary-chip"><b>${money(state.economy.budget)}</b><small>доступный бюджет</small></div><div class="summary-chip"><b>${state.warehouse.length}</b><small>категорий запасов</small></div></div><p>Выбери объект на карте или в списке. Все изменения сохраняются в общей модели мира.</p><div class="object-list">${state.objects.map(o=>`<button class="object-chip ${o.id===selectedId?"active":""}" data-select-object="${o.id}">${o.icon} ${esc(o.name)}</button>`).join("")}</div>`;
-  if(activeTab==="construction")html=`<div class="object-list">${state.objects.map(o=>`<button class="object-chip ${o.id===selectedId?"active":""}" data-select-object="${o.id}">${o.icon} ${esc(o.name)} · ${esc(o.status)}</button>`).join("")}</div><div class="stage-list">${(state.buildStages||[]).map(s=>{const o=state.objects.find(x=>x.id===s.objectId);return `<div class="stage-card"><div><b>${esc(s.title)}</b><small>${esc(o?.name||"Объект")} · ${s.workHours} ч · ${s.progress}%</small><div class="progress-track"><i style="width:${s.progress}%"></i></div></div><button data-stage-task="${esc(s.id)}" ${s.taskId?"disabled":""}>${s.taskId?"Задача создана":"Создать задачу"}</button></div>`}).join("")}</div><p>Этапы связаны с объектами и общей доской задач. Осмотр не предполагает заранее наличие дефектов.</p>`;
+  if(activeTab==="construction")html=`<div class="object-list">${state.objects.map(o=>`<button class="object-chip ${o.id===selectedId?"active":""}" data-select-object="${o.id}">${o.icon} ${esc(o.name)} · ${esc(o.status)}</button>`).join("")}</div><div class="stage-list">${(state.buildStages||[]).map(s=>{const o=state.objects.find(x=>x.id===s.objectId);return `<div class="stage-card"><div><b>${esc(s.title)}</b><small>${esc(o?.name||"Объект")} · ${s.workHours} ч · ${s.progress}%</small><div class="progress-track"><i style="width:${s.progress}%"></i></div></div><button data-stage-task="${esc(s.id)}" ${s.taskId?"disabled":""}>${s.taskId?"Задача создана":"Создать задачу"}</button></div>`}).join("")}</div><div class="actions"><button id="add-stage">＋ Новый этап для выбранного объекта</button></div><p>Этапы связаны с объектами и общей доской задач. Осмотр не предполагает заранее наличие дефектов.</p>`;
   if(activeTab==="warehouse")html=`<div class="tab-summary">${state.warehouse.map(r=>`<div class="summary-chip"><b>${r.quantity} ${esc(r.unit)}</b><small>${esc(r.name)} · минимум ${r.minimum}</small></div>`).join("")}</div>`;
   if(activeTab==="people")html=`<div class="tab-summary">${state.characters.map(c=>`<div class="summary-chip"><b>${esc(c.name)}</b><small>${esc(c.role)} · энергия ${c.energy}%</small></div>`).join("")}</div>`;
   if(activeTab==="garden")html='<p>Сад и огород отмечены на карте как единый объект. Сезонные работы, посадки и уход будут добавляться через игровые задачи.</p>';
@@ -84,6 +90,7 @@ function renderTab(){
   $("tab-content").innerHTML=html;
   document.querySelectorAll("[data-select-object]").forEach(el=>el.addEventListener("click",()=>selectObject(el.dataset.selectObject)));
   document.querySelectorAll("[data-stage-task]").forEach(el=>el.addEventListener("click",()=>createTaskFromStage(el.dataset.stageTask)));
+  $("add-stage")?.addEventListener("click",addStageForSelected);
   $("calendar-next-day")?.addEventListener("click",()=>{state.meta.day++;scheduleSave();renderHeader();renderTab();});
   $("calendar-next-month")?.addEventListener("click",()=>{state.meta.day+=30;const seasons=["Весна","Лето","Осень","Зима"];const i=seasons.indexOf(state.meta.season);state.meta.season=seasons[(i+1)%4];scheduleSave();renderHeader();renderTab();});
 
