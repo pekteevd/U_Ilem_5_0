@@ -148,3 +148,5 @@ textarea{resize:vertical;min-height:48px}
 .task-controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .task-controls label{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)}
 .task-controls select{max-width:190px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;background:#fffaf0;color:var(--ink)}
+
+.stage-list{display:grid;gap:8px;margin-top:10px}.stage-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px;background:#fff8e8a8;border:1px solid #d3bd96;border-radius:10px}.stage-card>div{min-width:0;flex:1}.stage-card b,.stage-card small{display:block}.stage-card small{font:11px Arial,sans-serif;color:#796a54;margin-top:3px}.progress-track{height:6px;background:#e2d4b9;border-radius:8px;margin-top:7px;overflow:hidden}.progress-track i{display:block;height:100%;background:#6b8b59}.stage-card button{font:11px Arial,sans-serif}
