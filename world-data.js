@@ -20,6 +20,22 @@ export const WORLD_OBJECTS = [
   {id:"well",name:"Колодец",type:"well",zone:"Водоснабжение",icon:"◉",description:"Источник воды на первом этапе развития инфраструктуры.",status:"Действующий источник",position:{x:.547,y:.425},dimensions:{w:3.8,d:3.8,h:3.7}}
 ];
 
+export const BUILDING_COMPONENTS = Object.freeze([
+  {id:"foundation",label:"Фундамент",unit:"конструкция",baseWear:0},
+  {id:"walls",label:"Стены",unit:"конструкция",baseWear:0},
+  {id:"roof",label:"Крыша",unit:"конструкция",baseWear:0},
+  {id:"windows",label:"Окна",unit:"комплект",baseWear:0},
+  {id:"doors",label:"Двери",unit:"комплект",baseWear:0}
+]);
+export function createBuildingState(object){
+  if(!["house","warehouse","tower","greenhouse","gazebo"].includes(object?.type))return null;
+  const ids=object.type==="tower"?["foundation","walls","roof"]:object.type==="greenhouse"?["foundation","walls","roof","windows","doors"]:object.type==="gazebo"?["foundation","walls","roof"]:["foundation","walls","roof","windows","doors"];
+  return {
+    components:ids.map(id=>({id,label:BUILDING_COMPONENTS.find(x=>x.id===id).label,condition:100,moisture:0,status:"Исправно",lastRepairAt:null})),
+    visualSeason:null
+  };
+}
+
 export function createInitialState(){
   return {
     schemaVersion:1,
@@ -34,7 +50,7 @@ export function createInitialState(){
       {id:"fuel",name:"Топливо",unit:"л",quantity:80,minimum:20},
       {id:"seeds",name:"Семена",unit:"пак.",quantity:12,minimum:3}
     ],
-    objects:WORLD_OBJECTS.map(o=>({...o,state:{condition:o.status==="Действующий источник"?"Работает":"Не оценено"},history:[]})),
+    objects:WORLD_OBJECTS.map(o=>({...o,state:{condition:o.status==="Действующий источник"?"Работает":"Не оценено",...(createBuildingState(o)||{})},history:[]})),
     characters:[
       {id:"dmitry",name:"Дмитрий",role:"Координатор",energy:100,skills:{construction:2,woodwork:2,ecology:1}},
       {id:"tatiana",name:"Татьяна",role:"Участник команды",energy:100,skills:{hospitality:2,ecology:1}},
@@ -45,7 +61,7 @@ export function createInitialState(){
     tasks:[],
     movements:[],
     transactions:[],
-    settings:{autosave:true,dayLengthMinutes:20}
+    settings:{autosave:true,dayLengthMinutes:20,buildingSystemVersion:1}
   };
 }
 
@@ -88,6 +104,28 @@ export function migrateState(saved){
       };
     }).concat(previousObjects.filter(object=>object&& !knownIds.has(object.id)));
     state.meta.worldMapVersion=4;
+    migrated=true;
+  }
+  if(!state.settings||typeof state.settings!=="object")state.settings={...defaults.settings};
+  if(Number(state.settings.buildingSystemVersion||0)<1){
+    state.objects.forEach(object=>{
+      const template=defaults.objects.find(item=>item.id===object.id);
+      if(template&&["house","warehouse","tower","greenhouse","gazebo"].includes(template.type)){
+        const existing=object.state?.components;
+        const base=createBuildingState(template);
+        if(!Array.isArray(existing)||!existing.length){
+          object.state={...(object.state||{}),...base};
+          migrated=true;
+        }else{
+          object.state.components=base.components.map(part=>{
+            const old=existing.find(item=>item.id===part.id);
+            return old?{...part,...old}:part;
+          });
+          migrated=true;
+        }
+      }
+    });
+    state.settings.buildingSystemVersion=1;
     migrated=true;
   }
   if(!Array.isArray(state.buildStages)){state.buildStages=defaults.buildStages;migrated=true;}
