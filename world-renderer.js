@@ -11,7 +11,7 @@ export class WorldRenderer{
     this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;
     this.raycaster=new THREE.Raycaster();this.pointer=new THREE.Vector2();
-    this.pickables=[];this.objectGroups=new Map();this.target=new THREE.Vector3(0,0,0);
+    this.pickables=[];this.objectGroups=new Map();this.characterGroups=new Map();this.target=new THREE.Vector3(0,0,0);
     this.drag=null;this.mapAspect=1;this.mapWidth=100;this.mapHeight=70;
     this.addLights();this.loadMap();this.bindControls();this.resize();
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(viewport);
@@ -143,6 +143,84 @@ export class WorldRenderer{
     group.traverse(node=>{if(node.isMesh){node.userData.objectId=object.id;this.pickables.push(node);node.castShadow=true;node.receiveShadow=true;}});
   }
   addObjects(objects){objects.forEach(o=>this.addObject(o));}
+  syncCharacters(characters,tasks,objects){
+    for(const group of this.characterGroups?.values?.()||[])this.scene.remove(group);
+    this.characterGroups=new Map();
+    const active=(tasks||[]).filter(t=>t.status==="in_progress"&&t.ownerId&&t.objectId);
+    const used=new Map();
+    active.forEach(task=>{
+      if(this.characterGroups.has(task.ownerId))return;
+      const person=(characters||[]).find(c=>c.id===task.ownerId);
+      const object=(objects||[]).find(o=>o.id===task.objectId);
+      if(!person||!object)return;
+      const count=used.get(object.id)||0;used.set(object.id,count+1);
+      const group=this.createWorker(person,task,object,count);
+      this.scene.add(group);this.characterGroups.set(person.id,group);
+    });
+  }
+  createWorker(person,task,object,index){
+    const palettes={
+      dmitry:{coat:0x53634a,trousers:0x3b4438,hair:0x3a2b22,skin:0xd7aa83,accent:0xb18b54},
+      tatiana:{coat:0x9b7655,trousers:0x59664b,hair:0xe4c276,skin:0xe6b995,accent:0xd9c7a0},
+      alexey:{coat:0x536b78,trousers:0x454a42,hair:0x62442f,skin:0xd6a57e,accent:0x9caa9d},
+      sergey:{coat:0x8a6842,trousers:0x424b3b,hair:0x51402e,skin:0xc99570,accent:0xc0a06b}
+    };
+    const p=palettes[person.id]||palettes.sergey;
+    const mat=c=>this.material(c,.92);
+    const group=new THREE.Group();group.userData.characterId=person.id;group.userData.taskId=task.id;
+    const point=this.mapPoint(object.position);
+    const side=index%2===0?-1:1;
+    group.position.set(point.x+side*(object.dimensions.w*.5+1.1),.02,point.z+object.dimensions.d*.5+1.15+Math.floor(index/2)*1.1);
+    group.rotation.y=side===-1?-.28:.28;
+    const skin=mat(p.skin),coat=mat(p.coat),trousers=mat(p.trousers),hair=mat(p.hair),boots=mat(0x332b22),accent=mat(p.accent);
+    const limb=(x1,y1,z1,x2,y2,z2,r,m)=>{
+      const a=new THREE.Vector3(x1,y1,z1),b=new THREE.Vector3(x2,y2,z2),delta=new THREE.Vector3().subVectors(b,a);
+      const mesh=new THREE.Mesh(new THREE.CylinderGeometry(r*.82,r,delta.length(),7),m);
+      mesh.position.copy(a).add(b).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize());group.add(mesh);return mesh;
+    };
+    // Static, readable working silhouette. No walk cycle or locomotion.
+    this.box(group,.58,.66,.34,coat,0,1.08,0);
+    this.box(group,.38,.14,.36,accent,0,1.43,0);
+    limb(-.17,.79,0,-.22,.22,.02,.105,trousers);
+    limb(.17,.79,0,.22,.22,.02,.105,trousers);
+    this.box(group,.22,.12,.34,boots,-.22,.08,.05);
+    this.box(group,.22,.12,.34,boots,.22,.08,.05);
+    const work=/сад|гряд|полив|посад|теплиц|урожай/i.test(task.title);
+    const inspect=/осмотр|провер|оцен|инвентар/i.test(task.title);
+    const raised=work||/ремонт|стро|кров|монтаж|почин/i.test(task.title);
+    limb(-.28,1.32,0,-.48,raised?1.48:1.17,.08,.085,coat);
+    limb(.28,1.32,0,.49,raised?1.5:1.14,.08,.085,coat);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(.23,12,10),skin);head.position.set(0,1.68,0);group.add(head);
+    const cap=new THREE.Mesh(new THREE.SphereGeometry(.235,12,7,0,Math.PI*2,0,Math.PI*.55),hair);cap.position.set(0,1.77,-.015);group.add(cap);
+    if(person.id==="tatiana"){
+      const bun=new THREE.Mesh(new THREE.SphereGeometry(.13,9,7),hair);bun.position.set(.17,1.65,-.12);group.add(bun);
+      limb(.19,1.65,-.1,.22,1.3,-.12,.055,hair);
+    }else{
+      const beard=new THREE.Mesh(new THREE.SphereGeometry(.12,9,6),hair);beard.scale.set(1,.55,.65);beard.position.set(0,1.53,.12);group.add(beard);
+    }
+    const eyeMat=mat(0x332a24);
+    this.box(group,.045,.045,.025,eyeMat,-.075,1.69,.215);
+    this.box(group,.045,.045,.025,eyeMat,.075,1.69,.215);
+    // Tool is a static visual cue, selected from the actual task title.
+    if(work){
+      const can=new THREE.Mesh(new THREE.CylinderGeometry(.09,.12,.23,8),accent);can.position.set(.54,1.03,.1);group.add(can);
+      const handle=new THREE.Mesh(new THREE.TorusGeometry(.09,.025,5,10,Math.PI),accent);handle.position.set(.54,1.16,.1);group.add(handle);
+    }else if(inspect){
+      this.box(group,.22,.28,.035,accent,.5,1.12,.1);
+    }else{
+      limb(.49,1.49,.08,.64,1.02,.13,.035,boots);
+      const tool=this.box(group,.055,.5,.055,accent,.64,1.22,.13);tool.rotation.z=-.2;
+    }
+    // Nameplate is a label, not an animated UI element.
+    const label=document.createElement("canvas");label.width=256;label.height=64;
+    const ctx=label.getContext("2d");ctx.fillStyle="rgba(31,43,32,.88)";ctx.beginPath();ctx.roundRect(4,4,248,56,14);ctx.fill();
+    ctx.fillStyle="#f5ecd8";ctx.font="bold 28px Georgia";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(person.name,128,33);
+    const texture=new THREE.CanvasTexture(label);const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false}));
+    sprite.scale.set(2.3,.58,1);sprite.position.set(0,2.35,0);group.add(sprite);
+    group.traverse(node=>{if(node.isMesh){node.castShadow=true;node.receiveShadow=true;}});
+    return group;
+  }
+
   bindControls(){
     this.canvas.addEventListener("pointerdown",e=>{this.drag={x:e.clientX,y:e.clientY,px:e.clientX,py:e.clientY,moved:false};this.canvas.setPointerCapture(e.pointerId);});
     this.canvas.addEventListener("pointermove",e=>{
