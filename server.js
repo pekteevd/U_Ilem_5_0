@@ -3,6 +3,7 @@ const fs=require("node:fs");
 const path=require("node:path");
 const ROOT=__dirname,DATA=path.join(ROOT,"data"),SAVE=path.join(DATA,"savegame.json"),PORT=4175,HOST="127.0.0.1";
 const OLLAMA_MODELS=["qwen3:4b","qwen3:1.7b"];
+let saveWriteQueue=Promise.resolve();
 fs.mkdirSync(DATA,{recursive:true});
 const MIME={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"text/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".txt":"text/plain; charset=utf-8"};
 function send(res,status,body,type="application/json; charset=utf-8"){res.writeHead(status,{"Content-Type":type,"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"});res.end(body);}
@@ -23,22 +24,49 @@ const server=http.createServer(async(req,res)=>{
     return send(res,200,fs.readFileSync(SAVE,"utf8"));
   }
   if(url.pathname==="/api/save"&&req.method==="POST"){
+    let state;
     try{
-      const body=await readBody(req,5_000_000),state=JSON.parse(body);
+      const body=await readBody(req,5_000_000);
+      state=JSON.parse(body);
       if(state?.schemaVersion!==1||!Array.isArray(state.objects)||!Array.isArray(state.tasks)||!state.economy)throw new Error("invalid_state_schema");
+    }catch(error){
+      return send(res,error.message==="request_too_large"?413:400,JSON.stringify({error:error.message}));
+    }
+
+    // Serialize the complete compare-and-write operation. Without this queue,
+    // concurrent requests could both compare against the same old snapshot.
+    const persist=saveWriteQueue.catch(()=>{}).then(()=>{
       const incomingTime=Date.parse(state.meta?.lastSavedAt||"");
       if(Number.isFinite(incomingTime)&&fs.existsSync(SAVE)){
         try{
           const current=JSON.parse(fs.readFileSync(SAVE,"utf8"));
           const currentState=current.state||current;
           const currentTime=Date.parse(currentState.meta?.lastSavedAt||"");
-          if(Number.isFinite(currentTime)&&incomingTime<currentTime)return send(res,409,JSON.stringify({error:"stale_save_rejected",savedAt:current.savedAt||currentState.meta.lastSavedAt}));
-        }catch(error){if(error.message==="stale_save_rejected")throw error;}
+          if(Number.isFinite(currentTime)&&incomingTime<currentTime){
+            const error=new Error("stale_save_rejected");
+            error.savedAt=current.savedAt||currentState.meta.lastSavedAt;
+            throw error;
+          }
+        }catch(error){
+          if(error.message==="stale_save_rejected")throw error;
+          // A damaged legacy save must not block recovery with a valid new snapshot.
+        }
       }
-      const temp=SAVE+".tmp";fs.writeFileSync(temp,JSON.stringify({state,savedAt:new Date().toISOString()}),"utf8");
-      if(fs.existsSync(SAVE))fs.copyFileSync(SAVE,SAVE+".bak");fs.renameSync(temp,SAVE);
-      return send(res,200,JSON.stringify({ok:true,savedAt:new Date().toISOString()}));
-    }catch(error){return send(res,error.message==="request_too_large"?413:400,JSON.stringify({error:error.message}));}
+      const savedAt=new Date().toISOString();
+      const temp=SAVE+".tmp";
+      fs.writeFileSync(temp,JSON.stringify({state,savedAt}),"utf8");
+      if(fs.existsSync(SAVE))fs.copyFileSync(SAVE,SAVE+".bak");
+      fs.renameSync(temp,SAVE);
+      return {ok:true,savedAt};
+    });
+    saveWriteQueue=persist;
+    try{
+      return send(res,200,JSON.stringify(await persist));
+    }catch(error){
+      if(error.message==="stale_save_rejected")return send(res,409,JSON.stringify({error:error.message,savedAt:error.savedAt||null}));
+      console.error("Save write failed:",error);
+      return send(res,500,JSON.stringify({error:"save_write_failed"}));
+    }
   }
   if(url.pathname==="/api/ollama/health"){
     try{return send(res,200,JSON.stringify(await ollamaHealth()));}
