@@ -426,10 +426,28 @@ export class WorldRenderer{
     const marker=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,.08,12),warm);
     marker.position.set(0,.09,0);marker.userData.objectId=o.id;group.add(marker);
   }
+  addBuildingCondition(group,object){
+    const parts=object.state?.components||[];
+    const condition=id=>Number(parts.find(part=>part.id===id)?.condition??100);
+    const {w,d,h}=object.dimensions;
+    const overlay=new THREE.Group();
+    const stain=this.material(0x493426,.98);
+    const add=(id,x,y,z,sx,sy,sz)=>{const value=condition(id);if(value>=90)return;const mark=this.box(overlay,sx*(1+(90-value)/90),sy*(1+(90-value)/90),sz,stain,x,y,z);mark.material=stain.clone();mark.material.color.setHex(value<35?0x241a15:0x513b2b);};
+    add("foundation",-.3*w,.2,d*.51,.5,.1,.04);
+    add("walls",-.34*w,h*.38,d*.51,.4,.5,.04);
+    add("roof",-.25*w,h*.9,d*.2,.8,.08,.16);
+    if(condition("windows")<85){const glass=this.material(0x59645e,.5,true,.7);const pane=this.box(overlay,.06,.5,.03,glass,-.29*w,h*.58,d*.52);pane.rotation.z=.15;}
+    if(object.state?.visualSeason==="Зима"){
+      const snow=this.material(0xe7eee9,.98);
+      if(object.type==="house"||object.type==="warehouse")this.addGableRoof(overlay,w,d,h*.66+.56,h*.3,snow,.62);
+      else this.box(overlay,Math.min(w,d)*.85,.08,Math.min(w,d)*.85,snow,0,h*.94,0);
+    }
+    group.add(overlay);
+  }
   addObject(object){
     if(!this.mapReady){this.pendingObjects.push(object);return;}
     const group=new THREE.Group();group.position.copy(this.mapPoint(object.position));group.userData.objectId=object.id;
-    this.buildModel(group,object);this.scene.add(group);this.objectGroups.set(object.id,group);
+    this.buildModel(group,object);this.addBuildingCondition(group,object);this.scene.add(group);this.objectGroups.set(object.id,group);
     group.traverse(node=>{if(node.isMesh){node.userData.objectId=object.id;this.pickables.push(node);node.castShadow=true;node.receiveShadow=true;}});
   }
   addObjects(objects){objects.forEach(o=>this.addObject(o));}
