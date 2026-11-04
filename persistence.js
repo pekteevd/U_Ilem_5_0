@@ -46,13 +46,22 @@ export async function saveState(state){
   catch(error){console.warn("Local save failed:",error);}
   const request=saveQueue.catch(()=>{}).then(async()=>{
     const response=await fetch("/api/save",{method:"POST",headers:{"Content-Type":"application/json"},body:snapshot});
-    if(!response.ok)throw new Error("HTTP "+response.status);
+    if(!response.ok){
+      let details={};
+      try{details=await response.json();}catch{}
+      const error=new Error(details.error||("HTTP "+response.status));
+      error.status=response.status;error.details=details;
+      throw error;
+    }
     const result=await response.json();
     return result;
   });
   saveQueue=request;
   try{await request;return {ok:true,server:true,local,savedAt};}
-  catch(error){console.warn("Server save failed:",error);return {ok:local,server:false,local,error:error.message,savedAt};}
+  catch(error){
+    console.warn("Server save failed:",error);
+    return {ok:local,server:false,local,conflict:error.status===409,error:error.message,serverSavedAt:error.details?.savedAt||null,savedAt};
+  }
 }
 
 export function exportState(state){
