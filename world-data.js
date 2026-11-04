@@ -10,11 +10,11 @@ export const WORLD_MAP_CONFIG = Object.freeze({
 });
 
 export const WORLD_OBJECTS = [
-  {id:"house-main",name:"Главный дом",type:"house",zone:"Жилая зона",icon:"⌂",description:"Основной жилой дом и центр повседневной жизни У Илем.",status:"Требует обустройства",position:{x:.48,y:.49},dimensions:{w:5.8,d:4.8,h:4.0}},
+  {id:"house-main",name:"Главный дом",type:"house",zone:"Жилая зона",icon:"⌂",description:"Основной жилой дом и центр повседневной жизни У Илем.",status:"Требует обустройства",position:{x:.48,y:.49},dimensions:{w:5.8,d:4.8,h:4.5}},
   {id:"lighthouse",name:"Башня-маяк",type:"tower",zone:"Верхняя часть усадьбы",icon:"♜",description:"Деревянная водонапорная башня с обзорной площадкой и светом.",status:"Планируется",position:{x:.76,y:.28},dimensions:{w:2.6,d:2.6,h:8.2}},
-  {id:"warehouse",name:"Общий склад",type:"warehouse",zone:"Хозяйственная зона",icon:"▤",description:"Центральное хранение материалов, инструментов и запасов.",status:"Планируется",position:{x:.79,y:.41},dimensions:{w:4.1,d:3.6,h:3.2}},
+  {id:"warehouse",name:"Общий склад",type:"warehouse",zone:"Хозяйственная зона",icon:"▤",description:"Центральное хранение материалов, инструментов и запасов.",status:"Планируется",position:{x:.79,y:.41},dimensions:{w:4.1,d:3.6,h:3.6}},
   {id:"greenhouse",name:"Теплица",type:"greenhouse",zone:"Огород",icon:"▱",description:"Защищённое пространство для выращивания рассады и культур.",status:"Планируется",position:{x:.29,y:.66},dimensions:{w:6.2,d:3.2,h:2.4}},
-  {id:"gazebo",name:"Беседка",type:"gazebo",zone:"Общая зона",icon:"⌑",description:"Место встреч, отдыха и совместной работы.",status:"Планируется",position:{x:.61,y:.66},dimensions:{w:4.4,d:4.2,h:3.3}},
+  {id:"gazebo",name:"Беседка",type:"gazebo",zone:"Общая зона",icon:"⌑",description:"Место встреч, отдыха и совместной работы.",status:"Планируется",position:{x:.61,y:.66},dimensions:{w:4.4,d:4.2,h:3.4}},
   {id:"firepit",name:"Костровая зона",type:"firepit",zone:"Общая зона",icon:"♨",description:"Открытый очаг и место вечерних встреч.",status:"Планируется",position:{x:.69,y:.78},dimensions:{w:3.4,d:3.4,h:2.2}},
   {id:"garden",name:"Сад и огород",type:"garden",zone:"Зелёная зона",icon:"♧",description:"Плодовые деревья, грядки и сезонный уход.",status:"Требует ухода",position:{x:.36,y:.78},dimensions:{w:7,d:5,h:3.2}},
   {id:"well",name:"Колодец",type:"well",zone:"Водоснабжение",icon:"◉",description:"Источник воды на первом этапе развития инфраструктуры.",status:"Действующий источник",position:{x:.43,y:.58},dimensions:{w:1.8,d:1.8,h:3.7}}
@@ -23,7 +23,7 @@ export const WORLD_OBJECTS = [
 export function createInitialState(){
   return {
     schemaVersion:1,
-    meta:{project:"У Илем 5.0",createdAt:new Date().toISOString(),lastSavedAt:null,day:1,season:"Весна",worldMapVersion:2},
+    meta:{project:"У Илем 5.0",createdAt:new Date().toISOString(),lastSavedAt:null,day:1,season:"Весна",worldMapVersion:3},
     economy:{budget:2000000,reserve:500000,currency:"RUB"},
     warehouse:[
       {id:"boards",name:"Доски",unit:"шт.",quantity:120,minimum:20},
@@ -72,7 +72,7 @@ export function migrateState(saved){
   ["objects","tasks","movements","transactions"].forEach(key=>{
     if(!Array.isArray(state[key])){state[key]=[];migrated=true;}
   });
-  if(savedWorldMapVersion<2){
+  if(savedWorldMapVersion<3){
     const previousObjects=state.objects;
     const knownIds=new Set(defaults.objects.map(object=>object.id));
     state.objects=defaults.objects.map(base=>{
@@ -87,7 +87,7 @@ export function migrateState(saved){
         dimensions:{...base.dimensions}
       };
     }).concat(previousObjects.filter(object=>object&& !knownIds.has(object.id)));
-    state.meta.worldMapVersion=2;
+    state.meta.worldMapVersion=3;
     migrated=true;
   }
   if(!Array.isArray(state.buildStages)){state.buildStages=defaults.buildStages;migrated=true;}
