@@ -12,79 +12,98 @@
     <header class="topbar">
       <div class="brand"><span class="brand-mark">У</span><div><strong>У Илем</strong><small>пространство новой жизни · 5.0</small></div></div>
       <div class="top-stats">
-        <div><small>День</small><strong id="game-day">1 · Весна</strong></div>
+        <div><small>Игровой день</small><strong id="game-day">1 · Весна</strong></div>
         <div><small>Бюджет</small><strong id="budget">2 000 000 ₽</strong></div>
         <div><small>Резерв</small><strong id="reserve">500 000 ₽</strong></div>
+        <div><small>Задачи</small><strong id="header-task-count">0</strong></div>
+        <div><small>Команда</small><strong>2 участника</strong></div>
         <div class="save-state" id="save-state">Загрузка…</div>
+        <button id="export-save" class="quiet">Сохранение ↓</button>
       </div>
     </header>
-    <main class="layout">
-      <aside class="left-panel">
-        <section class="panel-block">
-          <div class="section-heading"><span>Пространство</span><span class="subtle">объекты</span></div>
-          <div id="object-list" class="object-list"></div>
-        </section>
-        <section class="panel-block resource-block">
-          <div class="section-heading"><span>Склад</span><span class="subtle">стартовые остатки</span></div>
-          <div id="resource-list"></div>
-        </section>
-        <section class="panel-block">
-          <div class="section-heading"><span>Команда</span><span class="subtle">настройка позже</span></div>
-          <div class="team-line"><span class="avatar">Д</span><span><b>Дмитрий</b><small>координатор</small></span><i>●</i></div>
-          <div class="team-line"><span class="avatar">Т</span><span><b>Татьяна</b><small>участник команды</small></span><i>●</i></div>
-        </section>
-      </aside>
-      <section class="world-section">
-        <div class="world-toolbar">
-          <div><strong>Территория У Илем</strong><small>Колесо мыши: масштаб · перетаскивание: обзор · щелчок: объект</small></div>
-          <div class="toolbar-actions">
-            <button id="zoom-out" title="Отдалить">−</button><button id="zoom-in" title="Приблизить">+</button><button id="reset-view" class="quiet">Сбросить вид</button><button id="export-save" class="quiet">Экспорт сохранения</button>
+
+    <main class="workspace">
+      <section class="main-column">
+        <section class="world-card">
+          <div class="world-toolbar">
+            <div><strong>Территория У Илем</strong><small>Колесо мыши: масштаб · перетаскивание: обзор · щелчок: объект</small></div>
+            <div class="toolbar-actions">
+              <button id="zoom-out" title="Отдалить">−</button><button id="zoom-in" title="Приблизить">+</button><button id="reset-view" class="quiet">На всю территорию</button>
+            </div>
           </div>
-        </div>
-        <div id="world-viewport">
-          <div id="map-loading">Загрузка утверждённой карты…</div>
-          <canvas id="world-canvas"></canvas>
-          <div class="map-legend"><span><i class="legend-dot"></i> интерактивные объекты</span><span>Карта: утверждённый оригинал</span></div>
-        </div>
-        <div class="bottom-panels">
-          <section class="mini-panel">
-            <div class="section-heading"><span>Общие задачи</span><span id="task-count" class="subtle">0</span></div>
+          <div id="world-viewport">
+            <div id="map-loading">Загрузка утверждённой карты…</div>
+            <canvas id="world-canvas"></canvas>
+            <div class="map-legend"><span><i class="legend-dot"></i> интерактивные объекты</span><span>Каноническая карта · 2.5D</span></div>
+          </div>
+        </section>
+
+        <nav class="section-tabs" aria-label="Разделы хозяйства">
+          <button class="tab active" data-tab="overview">Обзор</button>
+          <button class="tab" data-tab="construction">Строительство</button>
+          <button class="tab" data-tab="warehouse">Склад</button>
+          <button class="tab" data-tab="people">Люди</button>
+          <button class="tab" data-tab="garden">Сад</button>
+          <button class="tab" data-tab="projects">Проекты</button>
+          <button class="tab" data-tab="guests">Гости и события</button>
+          <button class="tab" data-tab="finance">Финансы</button>
+          <button class="tab" data-tab="chronicle">Хроника</button>
+        </nav>
+        <section class="tab-workspace panel">
+          <div class="section-heading"><span id="tab-title">Обзор территории</span><span class="subtle" id="tab-caption">состояние хозяйства</span></div>
+          <div id="tab-content" class="tab-content"></div>
+        </section>
+
+        <section class="communication-grid">
+          <section class="panel chat-panel">
+            <div class="section-heading"><span>Командный чат</span><span class="ai-state" id="ollama-status">Ollama: проверка…</span></div>
+            <div id="chat-messages" class="chat-messages">
+              <div class="chat-message system-message"><b>Система</b><p>Ручные задачи доступны всегда. Интеллектуальный советник отвечает через локальную Ollama и не меняет игровой мир без подтверждения.</p></div>
+            </div>
+            <div class="chat-compose">
+              <textarea id="chat-input" rows="2" placeholder="Поручение или вопрос к интеллектуальному советнику…"></textarea>
+              <button id="send-chat" class="primary">Отправить</button>
+            </div>
+            <div class="hint" id="chat-hint">Командный анализ выполняется локальной моделью. Автоматическое создание задач и расходы отключены.</div>
+          </section>
+          <section class="panel task-panel">
+            <div class="section-heading"><span>Общая доска задач</span><span id="task-count" class="subtle">0</span></div>
             <div id="task-list" class="task-list"><div class="empty-state">Пока нет задач. Выбери объект и добавь первую.</div></div>
+            <div class="quick-task">
+              <input id="task-title" type="text" placeholder="Новая задача…">
+              <input id="task-due" type="number" min="1" value="2" aria-label="День выполнения">
+              <button id="create-task" class="primary">＋ Добавить</button>
+            </div>
+            <div class="hint" id="task-hint">Выбери объект на карте, чтобы связать задачу с ним. Ручное добавление не требует Ollama.</div>
           </section>
-          <section class="mini-panel calendar-panel">
-            <div class="section-heading"><span>Календарь</span><span class="subtle">тот же список задач</span></div>
-            <div id="calendar-list" class="calendar-list"><div class="empty-state">Запланированные задачи появятся здесь.</div></div>
-          </section>
-        </div>
+        </section>
+        <section class="community-strip">
+          <div><b>Сообщество</b><span>Пространство совместного создания и жизни</span></div>
+          <div><b>События</b><span>Пока нет запланированных событий</span></div>
+        </section>
       </section>
-      <aside class="right-panel">
-        <section class="panel-block object-details">
-          <div class="section-heading"><span>Карточка объекта</span><span id="object-kind" class="subtle">не выбран</span></div>
+
+      <aside class="context-column">
+        <section class="panel object-panel">
+          <div class="section-heading"><span>Выбранный объект</span><span id="object-kind" class="subtle">не выбран</span></div>
           <div id="selected-object" class="selected-object">
-            <div class="object-placeholder">⌖</div>
-            <h2>Выбери объект на карте</h2>
-            <p>У каждого объекта будет собственное состояние, история, осмотры, этапы и связанные задачи.</p>
+            <div class="object-placeholder">⌖</div><h2>Выбери объект на карте</h2>
+            <p>У объекта есть собственное состояние, история, осмотры, этапы и связанные задачи.</p>
           </div>
           <div id="object-actions" class="object-actions" hidden>
-            <button id="add-task" class="primary">＋ Создать задачу</button>
+            <button id="add-task" class="primary">＋ Создать задачу для объекта</button>
             <button id="focus-object" class="secondary">Показать на карте</button>
           </div>
         </section>
-        <section class="panel-block task-create">
-          <div class="section-heading"><span>Новая задача</span><span class="subtle">единая модель</span></div>
-          <label for="task-title">Что нужно сделать?</label>
-          <input id="task-title" type="text" placeholder="Например, осмотреть крышу">
-          <label for="task-due">День выполнения</label>
-          <input id="task-due" type="number" min="1" value="2">
-          <button id="create-task" class="primary full">Добавить задачу</button>
-          <p class="hint" id="task-hint">Сначала выбери объект, чтобы связать задачу с ним.</p>
+        <section class="panel context-panel">
+          <div class="section-heading"><span>Ближайшие задачи</span><span class="subtle">календарь</span></div>
+          <div id="calendar-list" class="calendar-list"><div class="empty-state">Запланированные задачи появятся здесь.</div></div>
         </section>
-        <section class="panel-block">
-          <div class="section-heading"><span>Состояние проекта</span></div>
+        <section class="panel context-panel">
+          <div class="section-heading"><span>Состояние системы</span></div>
           <div class="system-line"><span>Локальное сохранение</span><b id="local-status">проверка</b></div>
           <div class="system-line"><span>Сервер сохранений</span><b id="server-status">проверка</b></div>
-          <div class="system-line"><span>Ollama</span><b id="ollama-status">не проверена</b></div>
-          <p class="hint">ИИ подключается отдельно и не влияет на запуск базовой игры.</p>
+          <div class="system-line"><span>Ollama</span><b id="ollama-status-side">проверка</b></div>
         </section>
       </aside>
     </main>
