@@ -30,6 +30,8 @@ page.on("requestfailed", request => failedRequests.push({
   url: request.url(),
   error: request.failure()?.errorText || "unknown"
 }));
+await page.route("**/favicon.ico", route => route.fulfill({ status: 204, body: "" }));
+
 page.on("response", response => {
   if (response.url().includes("U_Ilem_map_empty.png")) {
     mapResponses.push({ status: response.status(), url: response.url() });
@@ -74,6 +76,17 @@ try {
   if (scene.webglError !== 0) throw new Error("WebGL вернул ошибку: " + scene.webglError);
 
   await page.screenshot({ path: path.join(out, "scene.png"), fullPage: true });
+  const baseMapDataUrl = await page.evaluate(async file => {
+    const image = new Image();
+    image.src = "./" + file;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    canvas.getContext("2d").drawImage(image, 0, 0);
+    return canvas.toDataURL("image/png");
+  }, WORLD_MAP_CONFIG.file);
+  fs.writeFileSync(path.join(out, "base-map.png"), Buffer.from(baseMapDataUrl.split(",")[1], "base64"));
 
   // Exercise camera controls and tab navigation, then return to the overview.
   await page.click("#zoom-in");
