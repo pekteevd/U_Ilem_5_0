@@ -2,7 +2,7 @@ import {WORLD_OBJECTS,createInitialState} from "./world-data.js";
 import {WorldRenderer} from "./world-renderer.js";
 import {loadState,saveState,exportState} from "./persistence.js";
 
-let state=createInitialState(),selectedId=null,renderer=null,saveTimer=null,ollamaReady=false,activeTab="overview";
+let state=createInitialState(),selectedId=null,renderer=null,saveTimer=null,saveRevision=0,ollamaReady=false,activeTab="overview";
 const $=id=>document.getElementById(id);
 const money=n=>new Intl.NumberFormat("ru-RU",{maximumFractionDigits:0}).format(n)+" ₽";
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -139,8 +139,17 @@ async function sendChat(){
   finally{$("send-chat").disabled=false;$("chat-hint").textContent="Советник анализирует данные игры, но не создаёт задачи, не меняет объекты и не тратит деньги.";input.focus();}
 }
 function scheduleSave(){
+  const revision=++saveRevision;
   $("save-state").textContent="Есть изменения…";clearTimeout(saveTimer);
-  saveTimer=setTimeout(async()=>{state.meta.lastSavedAt=new Date().toISOString();const result=await saveState(state);$("save-state").textContent=result.server?"Сохранено":"Локальная копия";$("server-status").textContent=result.server?"доступен":"нет связи";$("local-status").textContent="сохранено";},450);
+  saveTimer=setTimeout(async()=>{
+    state.meta.lastSavedAt=new Date().toISOString();
+    const result=await saveState(state);
+    if(revision!==saveRevision)return;
+    $("save-state").textContent=result.server?"Сохранено на сервере":result.local?"Сохранена локальная копия":"Ошибка сохранения";
+    $("server-status").textContent=result.server?"доступен":result.error||"нет связи";
+    $("local-status").textContent=result.local?"сохранено":"ошибка";
+    if(!result.ok)toast("Не удалось сохранить игру. Экспортируй сохранение перед выходом.");
+  },450);
 }
 async function checkOllama(){
   try{const r=await fetch("/api/ollama/health");const d=await r.json();ollamaReady=!!(d.available&&d.modelAvailable);const label=ollamaReady?"Ollama · "+d.selectedModel+" готова":d.available?"Ollama доступна, подходящая модель не найдена":"Ollama не подключена";$("ollama-status").textContent=label;$("ollama-status-side").textContent=ollamaReady?d.selectedModel+" готова":d.available?"модель не найдена":"не подключена";}
