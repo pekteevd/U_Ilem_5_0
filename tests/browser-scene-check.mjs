@@ -195,6 +195,14 @@ try {
     objectSelections.push(object.name);
   }
 
+  await page.click("#focus-object");
+  const canvasRect = await page.locator("#world-canvas").boundingBox();
+  await page.mouse.move(canvasRect.x + canvasRect.width * 0.22, canvasRect.y + canvasRect.height * 0.24);
+  await page.mouse.down();
+  await page.mouse.move(canvasRect.x + canvasRect.width * 0.30, canvasRect.y + canvasRect.height * 0.30, { steps: 5 });
+  await page.mouse.up();
+  await page.click("#reset-view");
+
   await page.click('[data-tab="construction"]');
   const constructionTabVisible = await page.locator("#tab-title").textContent();
   await page.click('[data-tab="overview"]');
