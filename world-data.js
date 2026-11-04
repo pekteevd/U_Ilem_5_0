@@ -1,3 +1,14 @@
+export const WORLD_MAP_CONFIG = Object.freeze({
+  file: "U_Ilem_map_empty.png",
+  blobSha: "201a8d9b569b0246a8aaa787be75fb80b495593a",
+  exampleFile: "U_Ilem_map.png",
+  exampleBlobSha: "f2a308f101daaab0d010f13d1127f331929ba2b0",
+  worldWidth: 100,
+  coordinateSystem: "normalized-image-uv",
+  uvOrigin: "top-left",
+  note: "Only U_Ilem_map_empty.png is a runtime background. U_Ilem_map.png is a visual reference only."
+});
+
 export const WORLD_OBJECTS = [
   {id:"house-main",name:"Главный дом",type:"house",zone:"Жилая зона",icon:"⌂",description:"Основной жилой дом и центр повседневной жизни У Илем.",status:"Требует обустройства",position:{x:.48,y:.49},dimensions:{w:5.8,d:4.8,h:3.6}},
   {id:"lighthouse",name:"Башня-маяк",type:"tower",zone:"Верхняя часть усадьбы",icon:"♜",description:"Деревянная водонапорная башня с обзорной площадкой и светом.",status:"Планируется",position:{x:.76,y:.28},dimensions:{w:2.6,d:2.6,h:8.2}},
