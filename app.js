@@ -98,8 +98,12 @@ function acceptBuildStage(stageId){
 
   // Aggregate duplicate rows before checking stock. Each row must not pass
   // independently against the same unchanged warehouse quantity.
+  if(stage.requiredMaterials!=null&&!Array.isArray(stage.requiredMaterials)){
+    toast("Смета содержит некорректный список материалов. Проверь этап.");
+    return;
+  }
   const aggregated=new Map();
-  for(const req of (Array.isArray(stage.requiredMaterials)?stage.requiredMaterials:[])){
+  for(const req of (stage.requiredMaterials||[])){
     const itemId=String(req?.itemId||"");
     const quantity=Number(req?.quantity);
     if(!itemId||!Number.isFinite(quantity)||quantity<=0){
