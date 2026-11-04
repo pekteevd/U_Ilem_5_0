@@ -96,7 +96,7 @@ function scheduleSave(){
   saveTimer=setTimeout(async()=>{state.meta.lastSavedAt=new Date().toISOString();const result=await saveState(state);$("save-state").textContent=result.server?"Сохранено":"Локальная копия";$("server-status").textContent=result.server?"доступен":"нет связи";$("local-status").textContent="сохранено";},450);
 }
 async function checkOllama(){
-  try{const r=await fetch("/api/ollama/health");const d=await r.json();ollamaReady=!!(d.available&&d.modelAvailable);const label=ollamaReady?"Ollama · qwen3:4b готова":d.available?"Ollama доступна, qwen3:4b не найдена":"Ollama не подключена";$("ollama-status").textContent=label;$("ollama-status-side").textContent=ollamaReady?"qwen3:4b готова":d.available?"модель не найдена":"не подключена";}
+  try{const r=await fetch("/api/ollama/health");const d=await r.json();ollamaReady=!!(d.available&&d.modelAvailable);const label=ollamaReady?"Ollama · "+d.selectedModel+" готова":d.available?"Ollama доступна, подходящая модель не найдена":"Ollama не подключена";$("ollama-status").textContent=label;$("ollama-status-side").textContent=ollamaReady?d.selectedModel+" готова":d.available?"модель не найдена":"не подключена";}
   catch{ollamaReady=false;$("ollama-status").textContent="Ollama не подключена";$("ollama-status-side").textContent="не подключена";}
 }
 async function init(){
