@@ -26,9 +26,13 @@ function renderCommunityAndLog(){
 }
 function renderSelected(){
   const o=selectedObject();$("object-kind").textContent=o?o.zone:"не выбран";
-  $("selected-object").innerHTML=o?`<div class="object-placeholder">${o.icon}</div><h2>${esc(o.name)}</h2><p>${esc(o.description)}</p><div class="object-meta"><div class="meta-cell"><small>Состояние</small><b>${esc(o.state.condition)}</b></div><div class="meta-cell"><small>Статус</small><b>${esc(o.status)}</b></div><div class="meta-cell"><small>Связанные задачи</small><b>${state.tasks.filter(t=>t.objectId===o.id).length}</b></div><div class="meta-cell"><small>Идентификатор</small><b>${o.id}</b></div></div>`:`<div class="object-placeholder">⌖</div><h2>Выбери объект на карте</h2><p>У объекта есть собственное состояние, история, осмотры, этапы и связанные задачи.</p>`;
+  const components=o?.state?.components||[];
+  const componentHtml=components.length?`<section class="building-components"><h3>Конструкции и износ</h3>${components.map(part=>{const value=Math.max(0,Math.min(100,Number(part.condition??100)));const tone=value<35?"critical":value<70?"worn":"sound";return `<div class="building-part"><div class="part-head"><b>${esc(part.label)}</b><strong>${value}%</strong></div><div class="part-track"><i class="${tone}" style="width:${value}%"></i></div><small>${value>=90?"Исправно":value>=70?"Нужен контроль":value>=35?"Требуется ремонт":"Критическое состояние"}</small><button type="button" class="part-repair" data-repair-component="${esc(part.id)}" ${value>=100?"disabled":""}>Создать задачу ремонта</button></div>`;}).join("")}</section>`:"";
+  $("selected-object").innerHTML=o?`<div class="object-placeholder">${o.icon}</div><h2>${esc(o.name)}</h2><p>${esc(o.description)}</p><div class="object-meta"><div class="meta-cell"><small>Состояние</small><b>${esc(o.state.condition)}</b></div><div class="meta-cell"><small>Статус</small><b>${esc(o.status)}</b></div><div class="meta-cell"><small>Связанные задачи</small><b>${state.tasks.filter(t=>t.objectId===o.id).length}</b></div><div class="meta-cell"><small>Идентификатор</small><b>${o.id}</b></div></div>${componentHtml}`:`<div class="object-placeholder">⌖</div><h2>Выбери объект на карте</h2><p>У объекта есть собственное состояние, история, осмотры, этапы и связанные задачи.</p>`;
   $("object-actions").hidden=!o;
   $("task-hint").textContent=o?"Новая задача будет связана с объектом «"+o.name+"».":"Выбери объект на карте, чтобы связать задачу с ним. Ручное добавление не требует Ollama.";
+  document.querySelectorAll("[data-repair-component]").forEach(button=>button.addEventListener("click",()=>createComponentRepairTask(button.dataset.repairComponent)));
+
 }
 function renderTasks(){
   renderHeader();renderCommunityAndLog();
@@ -46,7 +50,7 @@ function renderTasks(){
     $("calendar-list").innerHTML=[...state.tasks].sort((a,b)=>a.dueDay-b.dueDay).map(t=>'<div class="task-card"><div class="task-main"><b>День '+t.dueDay+': '+esc(t.title)+'</b><small>'+esc(state.objects.find(o=>o.id===t.objectId)?.name||"Общая задача")+'</small></div></div>').join("");
     document.querySelectorAll("[data-task-status]").forEach(el=>el.addEventListener("change",()=>{
       const t=state.tasks.find(x=>x.id===el.dataset.taskStatus);
-      if(t){const stage=(state.buildStages||[]).find(x=>x.id===t.stageId);if(stage?.status==="done"&&el.value!=="done"){toast("Принятый этап нельзя откатить через статус задачи.");renderTasks();return;}if(el.value==="in_progress"&&(!t.ownerId||!state.characters.some(c=>c.id===t.ownerId))){toast("Перед началом работы назначь исполнителя.");renderTasks();return;}if(el.value==="done"&&(stage||t.source==="construction")&&t.status!=="in_progress"){toast("Строительную задачу можно завершить только после начала работы.");renderTasks();return;}if(el.value==="done"&&(stage||t.source==="construction")&&(!t.ownerId||!state.characters.some(c=>c.id===t.ownerId))){toast("Нельзя завершить строительную задачу без назначенного исполнителя.");renderTasks();return;}if(el.value==="in_progress"&&state.tasks.some(x=>x.id!==t.id&&x.ownerId===t.ownerId&&x.status==="in_progress")){toast("Этот участник уже выполняет другую задачу.");renderTasks();return;}t.status=el.value;t.updatedAt=new Date().toISOString();if(stage&&stage.status!=="done"){stage.status=el.value==="done"?"ready":el.value==="in_progress"?"in_progress":el.value==="blocked"?"blocked":"planned";stage.progress=el.value==="done"?90:el.value==="in_progress"?50:0;}scheduleSave();renderTasks();renderSelected();renderTab();}
+      if(t){const stage=(state.buildStages||[]).find(x=>x.id===t.stageId);if(stage?.status==="done"&&el.value!=="done"){toast("Принятый этап нельзя откатить через статус задачи.");renderTasks();return;}if(el.value==="in_progress"&&(!t.ownerId||!state.characters.some(c=>c.id===t.ownerId))){toast("Перед началом работы назначь исполнителя.");renderTasks();return;}if(el.value==="done"&&(stage||t.source==="construction")&&t.status!=="in_progress"){toast("Строительную задачу можно завершить только после начала работы.");renderTasks();return;}if(el.value==="done"&&(stage||t.source==="construction")&&(!t.ownerId||!state.characters.some(c=>c.id===t.ownerId))){toast("Нельзя завершить строительную задачу без назначенного исполнителя.");renderTasks();return;}if(el.value==="in_progress"&&state.tasks.some(x=>x.id!==t.id&&x.ownerId===t.ownerId&&x.status==="in_progress")){toast("Этот участник уже выполняет другую задачу.");renderTasks();return;}t.status=el.value;t.updatedAt=new Date().toISOString();if(el.value==="done"&&t.componentId){const object=state.objects.find(item=>item.id===t.objectId);const part=object?.state?.components?.find(item=>item.id===t.componentId);if(part){part.condition=100;part.moisture=0;part.status="Исправно";part.lastRepairAt=t.updatedAt;}}if(stage&&stage.status!=="done"){stage.status=el.value==="done"?"ready":el.value==="in_progress"?"in_progress":el.value==="blocked"?"blocked":"planned";stage.progress=el.value==="done"?90:el.value==="in_progress"?50:0;}scheduleSave();renderTasks();renderSelected();renderTab();}
     }));
     document.querySelectorAll("[data-task-actual-hours]").forEach(el=>el.addEventListener("change",()=>{const task=state.tasks.find(x=>x.id===el.dataset.taskActualHours);const hours=Number(el.value);if(!task||task.status!=="done"){toast("Фактические часы можно внести после завершения задачи.");renderTasks();return;}if(!Number.isFinite(hours)||hours<=0){toast("Укажи фактические часы больше нуля.");renderTasks();return;}task.actualHours=hours;task.updatedAt=new Date().toISOString();scheduleSave();}));
     document.querySelectorAll("[data-task-owner]").forEach(el=>el.addEventListener("change",()=>{
@@ -74,6 +78,22 @@ function createTaskFromStage(stageId){
   }
   const task={id:"task-"+crypto.randomUUID(),title:stage.title,objectId:stage.objectId,stageId:stage.id,source:"construction",ownerId:null,dueDay:state.meta.day+1,priority:"normal",status:"planned",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
   state.tasks.push(task);stage.taskId=task.id;scheduleSave();renderTasks();renderSelected();renderTab();toast("Этап добавлен на общую доску задач.");
+}
+function createComponentRepairTask(componentId){
+  const object=selectedObject();const part=object?.state?.components?.find(item=>item.id===componentId);
+  if(!object||!part||Number(part.condition)>=100)return;
+  const exists=state.tasks.some(task=>task.objectId===object.id&&task.componentId===componentId&&task.status!=="done");
+  if(exists){toast("Для этой конструкции уже есть незавершённая задача.");return;}
+  const task={id:"task-"+crypto.randomUUID(),title:"Ремонт: "+part.label+" · "+object.name,objectId:object.id,componentId,source:"building-repair",ownerId:null,dueDay:state.meta.day+1,priority:Number(part.condition)<35?"high":"normal",status:"planned",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+  state.tasks.push(task);scheduleSave();renderTasks();renderSelected();toast("Ремонт добавлен на общую доску задач.");
+}
+function applySeasonalWear(){
+  const season=state.meta.season;
+  (state.objects||[]).forEach(object=>{
+    const parts=object.state?.components||[];
+    const wear=season==="Зима"?{roof:1,windows:1}:season==="Осень"?{roof:1,walls:1}:season==="Весна"?{foundation:1,walls:1}:{};
+    parts.forEach(part=>{const loss=wear[part.id]||0;if(loss&&Number(part.condition)>0){part.condition=Math.max(0,Number(part.condition)-loss);part.status=part.condition<35?"Критическое состояние":part.condition<70?"Требуется ремонт":part.condition<90?"Нужен контроль":"Исправно";}});
+  });
 }
 function selectObject(id){selectedId=id;renderSelected();renderTab();}
 function processWarehouseForm(form){
@@ -289,7 +309,7 @@ function renderTab(){
   $("warehouse-form")?.addEventListener("submit",event=>{event.preventDefault();processWarehouseForm(event.currentTarget);});
   $("finance-form")?.addEventListener("submit",event=>{event.preventDefault();processFinanceForm(event.currentTarget);});
   $("calendar-next-day")?.addEventListener("click",()=>{state.meta.day++;scheduleSave();renderHeader();renderTab();});
-  $("calendar-next-month")?.addEventListener("click",()=>{state.meta.day+=30;const seasons=["Весна","Лето","Осень","Зима"];const i=seasons.indexOf(state.meta.season);state.meta.season=seasons[(i+1)%4];scheduleSave();renderHeader();renderTab();});
+  $("calendar-next-month")?.addEventListener("click",()=>{state.meta.day+=30;const seasons=["Весна","Лето","Осень","Зима"];const i=seasons.indexOf(state.meta.season);state.meta.season=seasons[(i+1)%4];applySeasonalWear();scheduleSave();renderHeader();renderSelected();renderTab();});
 
 }
 function renderTabs(){
