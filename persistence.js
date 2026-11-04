@@ -64,7 +64,7 @@ export function saveLocalSnapshot(state){
   const savedAt=new Date().toISOString();
   if(state.meta)state.meta.lastSavedAt=savedAt;
   const result=storeLocalSnapshot(state,savedAt);
-  return {ok:result.local,local:result.local,savedAt};
+  return {ok:result.local,local:result.local,conflict:!!result.conflict,error:result.error||null,savedAt};
 }
 
 export async function saveState(state){
