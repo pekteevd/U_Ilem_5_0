@@ -6,7 +6,7 @@ export class WorldRenderer{
     this.canvas=canvas;this.viewport=viewport;this.onSelect=onSelect;this.onReady=onReady;
     this.scene=new THREE.Scene();this.scene.background=new THREE.Color(0x28372c);
     this.camera=new THREE.OrthographicCamera(-50,50,30,-30,.1,600);
-    this.camera.position.set(0,100,100);this.camera.lookAt(0,0,0);
+    this.camera.position.set(0,100,70);this.camera.lookAt(0,0,0);
     this.renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false});
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.75));
     this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
@@ -485,7 +485,7 @@ export class WorldRenderer{
   setZoom(value){this.camera.zoom=THREE.MathUtils.clamp(value,.65,2.8);this.camera.position.set(this.target.x,this.cameraHeight/this.camera.zoom,this.target.z+this.cameraDepth/this.camera.zoom);this.camera.lookAt(this.target);this.camera.updateProjectionMatrix();}
   zoomIn(){this.setZoom(this.camera.zoom*1.15)}zoomOut(){this.setZoom(this.camera.zoom/1.15)}
   reset(){this.target.set(0,0,0);this.fitCamera();}
-  focusObject(id){const g=this.objectGroups.get(id);if(!g)return;this.target.set(g.position.x,0,g.position.z);this.camera.position.set(this.target.x,100/this.camera.zoom,this.target.z+36.4/this.camera.zoom);this.camera.lookAt(this.target);}
+  focusObject(id){const g=this.objectGroups.get(id);if(!g)return;this.target.set(g.position.x,0,g.position.z);this.camera.position.set(this.target.x,this.cameraHeight/this.camera.zoom,this.target.z+this.cameraDepth/this.camera.zoom);this.camera.lookAt(this.target);}
   animate(){
     const time=performance.now()*.001;
     for(const effect of this.flameEffects){
