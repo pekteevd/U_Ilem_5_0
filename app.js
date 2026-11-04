@@ -309,7 +309,7 @@ function scheduleSave(){
     if(revision!==saveRevision)return;
     $("save-state").textContent=result.server?"Сохранено на сервере":result.conflict?"Конфликт сохранения":result.local?"Сохранена локальная копия":"Ошибка сохранения";
     $("server-status").textContent=result.server?"доступен":result.conflict?"серверная версия новее":result.error||"нет связи";
-    $("local-status").textContent=result.local?"сохранено":"ошибка";
+    $("local-status").textContent=result.local?"сохранено":result.localConflict?"есть более новая копия":"ошибка";
     if(result.conflict)toast("На сервере уже есть более новая версия. Не закрывай эту вкладку: сначала экспортируй текущие изменения и сверь версии.");
     else if(!result.ok)toast("Не удалось сохранить игру. Экспортируй сохранение перед выходом.");
   },450);
