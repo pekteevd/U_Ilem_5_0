@@ -1,4 +1,5 @@
 import * as THREE from "./vendor/three.module.js";
+import {WORLD_MAP_CONFIG} from "./world-data.js";
 
 export class WorldRenderer{
   constructor(canvas,viewport,onSelect,onReady){
@@ -12,7 +13,7 @@ export class WorldRenderer{
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;
     this.raycaster=new THREE.Raycaster();this.pointer=new THREE.Vector2();
     this.pickables=[];this.objectGroups=new Map();this.characterGroups=new Map();this.target=new THREE.Vector3(0,0,0);
-    this.drag=null;this.mapAspect=1;this.mapWidth=100;this.mapHeight=70;
+    this.drag=null;this.mapAspect=1;this.mapWidth=WORLD_MAP_CONFIG.worldWidth;this.mapHeight=this.mapWidth/(1648/928);this.flameEffects=[];
     this.addLights();this.loadMap();this.bindControls();this.resize();
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(viewport);
     this.animate=this.animate.bind(this);requestAnimationFrame(this.animate);
@@ -25,14 +26,14 @@ export class WorldRenderer{
   }
   loadMap(){
     const loader=new THREE.TextureLoader();
-    loader.load("./U_Ilem_map_empty.png",texture=>{
+    loader.load("./"+WORLD_MAP_CONFIG.file,texture=>{
       texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=Math.min(8,this.renderer.capabilities.getMaxAnisotropy());
       const image=texture.image;this.mapAspect=image.width/image.height;this.mapHeight=this.mapWidth/this.mapAspect;
       const geometry=new THREE.PlaneGeometry(this.mapWidth,this.mapHeight);
       const material=new THREE.MeshBasicMaterial({map:texture});
       const plane=new THREE.Mesh(geometry,material);plane.rotation.x=-Math.PI/2;plane.position.y=-.12;plane.receiveShadow=true;plane.userData.isMap=true;
       this.scene.add(plane);this.fitCamera();document.getElementById("map-loading")?.classList.add("hidden");
-      this.onReady?.({width:image.width,height:image.height,aspect:this.mapAspect});
+      this.onReady?.({width:image.width,height:image.height,aspect:this.mapAspect,worldWidth:this.mapWidth,worldHeight:this.mapHeight,source:WORLD_MAP_CONFIG.file});
     },undefined,error=>{
       const el=document.getElementById("map-loading");if(el)el.textContent="Не удалось загрузить утверждённую карту. Проверь наличие PNG рядом с index.html.";
       console.error("Map load failed",error);
@@ -52,7 +53,11 @@ export class WorldRenderer{
     this.camera.left=-viewH*aspect/2;this.camera.right=viewH*aspect/2;this.camera.top=viewH/2;this.camera.bottom=-viewH/2;
     this.camera.updateProjectionMatrix();
   }
-  mapPoint(position){return new THREE.Vector3((position.x-.5)*this.mapWidth,.04,(position.y-.5)*this.mapHeight);}
+  mapPoint(position){
+    const u=Number(position?.x),v=Number(position?.y);
+    if(!Number.isFinite(u)||!Number.isFinite(v)||u<0||u>1||v<0||v>1)throw new RangeError("Позиция объекта должна быть нормализована в пределах карты 0..1.");
+    return new THREE.Vector3((u-.5)*this.mapWidth,.04,(v-.5)*this.mapHeight);
+  }
   material(color,roughness=.88,transparent=false,opacity=1){return new THREE.MeshStandardMaterial({color,roughness,transparent,opacity});}
   box(parent,w,h,d,mat,x=0,y=h/2,z=0){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);mesh.position.set(x,y,z);parent.add(mesh);return mesh;}
   roof(parent,w,h,d,color){const geo=new THREE.ConeGeometry(Math.sqrt(w*w+d*d)/1.35,h,4);const mesh=new THREE.Mesh(geo,this.material(color));mesh.rotation.y=Math.PI/4;mesh.position.y=h/2;parent.add(mesh);return mesh;}
@@ -64,78 +69,280 @@ export class WorldRenderer{
     const face=new THREE.Mesh(geo,faceMat);face.position.y=y;parent.add(face);
     const back=face.clone();back.position.z=-2*z;parent.add(back);
   }
-  buildHouse(group,o,wood,darkWood,roof,stone,glass,warm){
-    const {w,d,h}=o.dimensions,wallH=h*.62,baseH=.35,eaveY=baseH+wallH;
-    this.box(group,w+.45,baseH,d+.45,stone,0,baseH/2,0);
-    this.box(group,w+.18,.12,d+.18,darkWood,0,baseH+.06,0);
-    this.box(group,w,wallH,d,wood,0,baseH+wallH/2,0);
-    this.gableFace(group,w,wallH*.38,d/2+.006,wood,eaveY);
-    this.gableFace(group,w,wallH*.38,-d/2-.006,wood,eaveY);
-    const rise=wallH*.55,half=w*.57,slope=Math.atan2(rise,half),length=Math.sqrt(half*half+rise*rise);
-    const left=this.box(group,length,.2,d*1.18,roof,-w*.285,eaveY+rise/2,0);left.rotation.z=slope;
-    const right=this.box(group,length,.2,d*1.18,roof,w*.285,eaveY+rise/2,0);right.rotation.z=-slope;
-    this.box(group,.18,.2,d*1.2,darkWood,0,eaveY+rise,0);
-    for(const z of [-d*.25,d*.25]){
-      const windowMat=this.material(0x8fa99d,.35);
-      this.box(group,w*.19,wallH*.25,.09,darkWood,-w*.29,baseH+wallH*.58,z>0?d/2+.055:-d/2-.055);
-      this.box(group,w*.15,wallH*.2,.11,windowMat,-w*.29,baseH+wallH*.58,z>0?d/2+.11:-d/2-.11);
-      this.box(group,w*.19,wallH*.25,.09,darkWood,w*.29,baseH+wallH*.58,z>0?d/2+.055:-d/2-.055);
-      this.box(group,w*.15,wallH*.2,.11,windowMat,w*.29,baseH+wallH*.58,z>0?d/2+.11:-d/2-.11);
+
+  beamBetween(parent,a,b,width,material){
+    const start=a.isVector3?a:new THREE.Vector3(a.x,a.y,a.z);
+    const end=b.isVector3?b:new THREE.Vector3(b.x,b.y,b.z);
+    const direction=new THREE.Vector3().subVectors(end,start);
+    const mesh=new THREE.Mesh(new THREE.CylinderGeometry(width*.82,width,direction.length(),7),material);
+    mesh.position.copy(start).add(end).multiplyScalar(.5);
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.normalize());
+    parent.add(mesh);
+    return mesh;
+  }
+  addWindow(parent,x,y,z,width,height,frame,glass){
+    this.box(parent,width+.18,height+.16,.14,frame,x,y,z);
+    this.box(parent,width,height,.065,glass,x,y,z+.075);
+    this.box(parent,.055,height,.075,frame,x,y,z+.12);
+    this.box(parent,width,.055,.075,frame,x,y,z+.12);
+    this.box(parent,.055,height,.075,frame,x+width*.5,y,z+.12);
+    this.box(parent,.055,height,.075,frame,x-width*.5,y,z+.12);
+    this.box(parent,width,.045,.075,frame,x,y,z+.12);
+  }
+  addGableRoof(parent,w,d,eaveY,rise,roofMaterial,overhang=.5){
+    const half=(w+overhang*2)/2,depth=d+overhang*2;
+    const angle=Math.atan2(rise,half),length=Math.hypot(half,rise);
+    const left=this.box(parent,length,.22,depth,roofMaterial,-half/2,eaveY+rise/2,0);
+    left.rotation.z=angle;
+    const right=this.box(parent,length,.22,depth,roofMaterial,half/2,eaveY+rise/2,0);
+    right.rotation.z=-angle;
+    this.box(parent,.2,.24,depth,roofMaterial,0,eaveY+rise,0);
+    this.box(parent,.16,.18,depth,roofMaterial,0,eaveY-.02,0);
+  }
+  addBench(parent,x,z,rotation=0,woodMaterial=null,darkMaterial=null){
+    const bench=new THREE.Group();
+    const wood=woodMaterial||this.material(0x8b6743);
+    const dark=darkMaterial||this.material(0x51402e);
+    this.box(bench,2.15,.16,.48,wood,0,.62,0);
+    this.box(bench,2.15,.78,.14,wood,0,1.02,-.18);
+    for(const px of [-.88,.88]){
+      this.box(bench,.13,.62,.13,dark,px,.31,0);
+      this.box(bench,.13,.72,.13,dark,px,1.0,-.16);
     }
-    const door=this.box(group,w*.2,wallH*.62,.13,darkWood,0,baseH+wallH*.31,d/2+.075);
-    this.box(group,w*.24,.12,.24,warm,0,baseH+wallH*.63,d/2+.09);
-    this.box(group,w*.62,.18,d*.34,darkWood,0,.48,d*.68);
-    for(const x of [-w*.27,w*.27])this.box(group,.12,.55,.12,wood,x,.77,d*.78);
-    this.box(group,w*.7,.12,d*.4,wood,0,1.06,d*.78);
-    const chimney=this.box(group,.48,1.2,.48,stone,w*.27,eaveY+rise*.75,-d*.22);
-    this.box(group,.58,.12,.58,darkWood,w*.27,eaveY+rise*1.28,-d*.22);
+    bench.position.set(x,0,z);bench.rotation.y=rotation;parent.add(bench);
+    return bench;
+  }
+  addTree(parent,x,z,scale=1,fruit=false){
+    const tree=new THREE.Group();
+    const bark=this.material(0x60452f),leafA=this.material(0x526f43),leafB=this.material(0x6d864d),fruitMat=this.material(0xc36f43);
+    const trunkH=1.5*scale;
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.15*scale,.23*scale,trunkH,7),bark);
+    trunk.position.y=trunkH/2;tree.add(trunk);
+    this.beamBetween(tree,{x:0,y:trunkH*.72,z:0},{x:-.52*scale,y:trunkH+ .55*scale,z:.05*scale},.09*scale,bark);
+    this.beamBetween(tree,{x:0,y:trunkH*.78,z:0},{x:.5*scale,y:trunkH+.6*scale,z:-.04*scale},.09*scale,bark);
+    const crownA=new THREE.Mesh(new THREE.SphereGeometry(.92*scale,9,7),leafA);
+    crownA.position.set(0,trunkH+1.05*scale,0);tree.add(crownA);
+    const crownB=new THREE.Mesh(new THREE.SphereGeometry(.66*scale,8,7),leafB);
+    crownB.position.set(-.46*scale,trunkH+.8*scale,.2*scale);tree.add(crownB);
+    const crownC=new THREE.Mesh(new THREE.SphereGeometry(.62*scale,8,7),leafB);
+    crownC.position.set(.45*scale,trunkH+.82*scale,-.18*scale);tree.add(crownC);
+    if(fruit){
+      for(const [fx,fy,fz] of [[-.42,.95,.62],[.38,1.22,.48],[.58,.72,-.18],[-.2,1.42,-.48]]){
+        const item=new THREE.Mesh(new THREE.SphereGeometry(.11*scale,7,6),fruitMat);
+        item.position.set(fx*scale,trunkH+fy*scale,fz*scale);tree.add(item);
+      }
+    }
+    tree.position.set(x,0,z);parent.add(tree);
+    return tree;
+  }
+  addGardenFence(parent,w,d,material){
+    const halfW=w/2,halfD=d/2,spacing=1.65;
+    for(let x=-halfW;x<=halfW+.01;x+=spacing){
+      for(const z of [-halfD,halfD])this.box(parent,.13,.8,.13,material,x,.4,z);
+    }
+    for(let z=-halfD;z<=halfD+.01;z+=spacing){
+      for(const x of [-halfW,halfW])this.box(parent,.13,.8,.13,material,x,.4,z);
+    }
+    for(const y of [.28,.62]){
+      this.box(parent,w,.09,.09,material,0,y,-halfD);
+      this.box(parent,w,.09,.09,material,0,y,halfD);
+      this.box(parent,.09,.09,d,material,-halfW,y,0);
+      this.box(parent,.09,.09,d,material,halfW,y,0);
+    }
+  }
+
+  buildHouse(group,o,wood,darkWood,roof,stone,glass,warm){
+    const {w,d,h}=o.dimensions,baseH=.42,wallH=h*.66,eaveY=baseH+wallH;
+    this.box(group,w+.56,baseH,d+.56,stone,0,baseH/2,0);
+    this.box(group,w+.2,.16,d+.2,darkWood,0,baseH+.08,0);
+    this.box(group,w,wallH,d,wood,0,baseH+wallH/2,0);
+    for(let y=baseH+.32;y<eaveY-.08;y+=.42){
+      this.box(group,w+.08,.055,.08,darkWood,0,y,d/2+.035);
+      this.box(group,w+.08,.055,.08,darkWood,0,y,-d/2-.035);
+    }
+    this.gableFace(group,w,wallH*.34,d/2+.045,wood,eaveY);
+    this.gableFace(group,w,wallH*.34,-d/2-.045,wood,eaveY);
+    const frontZ=d/2+.09;
+    this.addWindow(group,-w*.29,baseH+wallH*.57,frontZ,w*.19,wallH*.27,darkWood,glass);
+    this.addWindow(group,w*.29,baseH+wallH*.57,frontZ,w*.19,wallH*.27,darkWood,glass);
+    this.addWindow(group,-w*.29,baseH+wallH*.57,-frontZ,w*.19,wallH*.27,darkWood,glass);
+    this.addWindow(group,w*.29,baseH+wallH*.57,-frontZ,w*.19,wallH*.27,darkWood,glass);
+    this.box(group,w*.21,wallH*.66,.16,darkWood,0,baseH+wallH*.33,frontZ+.035);
+    this.box(group,w*.12,.08,.055,warm,w*.045,baseH+wallH*.48,frontZ+.13);
+    this.addGableRoof(group,w,d,eaveY,wallH*.42,roof,.55);
+    this.box(group,.5,1.25,.5,stone,w*.28,eaveY+wallH*.34,-d*.22);
+    this.box(group,.62,.15,.62,darkWood,w*.28,eaveY+wallH*.77,-d*.22);
+    const porchZ=d*.68;
+    this.box(group,w*.76,.18,d*.48,darkWood,0,.54,porchZ);
+    for(const x of [-w*.32,w*.32]){
+      this.box(group,.14,1.2,.14,wood,x,1.14,porchZ+d*.2);
+      this.box(group,.12,.82,.12,darkWood,x,1.05,porchZ+d*.2);
+    }
+    this.box(group,w*.8,.12,.14,wood,0,1.72,porchZ+d*.2);
+    this.box(group,w*.46,.14,.55,stone,0,.17,d*.98);
+    const lamp=this.material(0xe1b65f,.45,true,.82);
+    this.box(group,.22,.3,.16,lamp,w*.34,baseH+wallH*.48,frontZ+.16);
   }
   buildModel(group,o){
-    const wood=this.material(0x8c6744),darkWood=this.material(0x5b4733),roof=this.material(0x536b70),stone=this.material(0x77796c),glass=this.material(0x9eb9ad,.35,true,.42),leaf=this.material(0x536d48),warm=this.material(0xd1a65e);
+    const wood=this.material(0x94704a),darkWood=this.material(0x5a4430),roof=this.material(0x52666a),stone=this.material(0x777a70),glass=this.material(0xa6c4b5,.28,true,.34),leaf=this.material(0x59764a),warm=this.material(0xd9a85e),soil=this.material(0x5b402c);
     const {w,d,h}=o.dimensions;
-    const shadow=new THREE.Mesh(new THREE.CircleGeometry(Math.max(w,d)*.72,32),new THREE.MeshBasicMaterial({color:0x10170f,transparent:true,opacity:.22,depthWrite:false}));
-    shadow.rotation.x=-Math.PI/2;shadow.position.y=.005;group.add(shadow);
-    if(o.type==="house")this.buildHouse(group,o,wood,darkWood,roof,stone,glass,warm);
-    else if(o.type==="tower"){
-      this.box(group,w*.68,.45,d*.68,stone,0,.23,0);
-      this.box(group,w*.62,h*.65,d*.62,wood,0,h*.32,0);
-      this.box(group,w*.96,.32,d*.96,darkWood,0,h*.68,0);
-      this.box(group,w*.86,.2,d*.86,roof,0,h*.78,0);
-      this.roof(group,w*.88,h*.35,d*.88,0x6b5942);
-      this.box(group,w*.9,.2,d*.9,warm,0,h*.9,0);
-      const railMat=this.material(0x6b5138);
-      for(let i=0;i<12;i++){const a=i*Math.PI/6;this.box(group,.09,.75,.09,railMat,Math.cos(a)*w*.48,h*.9,Math.sin(a)*d*.48);}
-      for(let y=.8;y<h*.65;y+=1.15){this.box(group,w*.65,.08,d*.65,darkWood,0,y,0);}
+    const shadow=new THREE.Mesh(new THREE.CircleGeometry(Math.max(w,d)*.78,32),new THREE.MeshBasicMaterial({color:0x10170f,transparent:true,opacity:.19,depthWrite:false}));
+    shadow.rotation.x=-Math.PI/2;shadow.position.y=.006;group.add(shadow);
+
+    if(o.type==="house"){
+      this.buildHouse(group,o,wood,darkWood,roof,stone,glass,warm);
+    }else if(o.type==="tower"){
+      const plinth=new THREE.Mesh(new THREE.CylinderGeometry(w*.58,w*.64,.5,10),stone);plinth.position.y=.25;group.add(plinth);
+      const legMat=this.material(0x694b32),braceMat=this.material(0x523d2c);
+      const half=w*.34,topY=h*.62;
+      for(const x of [-half,half])for(const z of [-half,half]){
+        this.beamBetween(group,{x:x*1.2,y:.48,z:z*1.2},{x,y:topY,z},.17,legMat);
+        this.box(group,.2,.18,.2,darkWood,x,.58,z);
+      }
+      for(const y of [1.25,topY*.48]){
+        for(const z of [-half,half])this.beamBetween(group,{x:-half,y:y*.72,z},{x:half,y:y*.72,z},.075,braceMat);
+        for(const x of [-half,half])this.beamBetween(group,{x,y:y*.72,z:-half},{x,y:y*.72,z:half},.075,braceMat);
+      }
+      const radius=w*.39,tankH=h*.32,tankY=topY-tankH*.18;
+      const tank=new THREE.Mesh(new THREE.CylinderGeometry(radius*.92,radius,tankH,14),wood);tank.position.y=tankY;group.add(tank);
+      for(let i=0;i<16;i++){
+        const a=i*Math.PI*2/16;
+        const slat=this.box(group,.085,tankH*.94,.09,darkWood,Math.cos(a)*radius*.91,tankY,Math.sin(a)*radius*.91);
+        slat.rotation.y=-a;
+      }
+      for(const y of [tankY-tankH*.43,tankY+tankH*.43]){
+        const ring=new THREE.Mesh(new THREE.TorusGeometry(radius*.97,.09,6,24),darkWood);ring.rotation.x=Math.PI/2;ring.position.y=y;group.add(ring);
+      }
+      const deckY=topY+.14;
+      const deck=new THREE.Mesh(new THREE.CylinderGeometry(w*.66,w*.66,.22,12),darkWood);deck.position.y=deckY;group.add(deck);
+      const railMat=this.material(0x755638);
+      for(let i=0;i<16;i++){
+        const a=i*Math.PI*2/16,x=Math.cos(a)*w*.63,z=Math.sin(a)*w*.63;
+        this.box(group,.09,.78,.09,railMat,x,deckY+.49,z);
+      }
+      const rail=new THREE.Mesh(new THREE.TorusGeometry(w*.63,.055,5,32),wood);rail.rotation.x=Math.PI/2;rail.position.y=deckY+.85;group.add(rail);
+      const roofCap=new THREE.Mesh(new THREE.ConeGeometry(w*.62,h*.19,8),roof);roofCap.position.y=deckY+1.12;group.add(roofCap);
+      for(let y=.75;y<topY-.25;y+=.44){
+        this.box(group,.62,.075,.075,wood,-w*.08,y,w*.42);
+      }
+      this.box(group,.9,.11,.12,darkWood,0,topY*.55,w*.46);
+      const lampGlass=this.material(0xf0c56c,.25,true,.85);
+      const beacon=new THREE.Mesh(new THREE.SphereGeometry(.23,10,8),lampGlass);beacon.position.set(0,deckY+1.92,0);group.add(beacon);
+      const glow=new THREE.PointLight(0xffc66e,2.1,17);glow.position.copy(beacon.position);group.add(glow);
+      const beam=new THREE.Mesh(new THREE.ConeGeometry(2.4,6.5,20,1,true),new THREE.MeshBasicMaterial({color:0xffd88b,transparent:true,opacity:.07,side:THREE.DoubleSide,depthWrite:false}));
+      beam.position.set(0,deckY-2.0,0);beam.rotation.x=Math.PI;group.add(beam);
     }else if(o.type==="warehouse"){
-      this.box(group,w+.3,.32,d+.3,stone,0,.16,0);this.box(group,w,h*.7,d,wood,0,h*.35,0);
-      this.roof(group,w*1.18,h*.45,d*1.18,0x66594a);
-      this.box(group,1.25,1.8,.14,darkWood,0,.9,d/2+.08);
-      for(const x of [-w*.3,w*.3])this.box(group,.12,h*.55,.12,darkWood,x,h*.32,d/2+.1);
+      this.box(group,w+.5,.35,d+.5,stone,0,.18,0);
+      this.box(group,w,.18,d,darkWood,0,.43,0);
+      const wallH=h*.66,eaveY=.52+wallH;
+      this.box(group,w,wallH,d,wood,0,.52+wallH/2,0);
+      this.gableFace(group,w,wallH*.38,d/2+.025,wood,eaveY);
+      this.gableFace(group,w,wallH*.38,-d/2-.025,wood,eaveY);
+      this.addGableRoof(group,w,d,eaveY,wallH*.42,roof,.45);
+      const doorZ=d/2+.1;
+      for(const x of [-w*.22,w*.22]){
+        this.box(group,w*.34,1.95,.16,darkWood,x,1.5,doorZ);
+        for(let y=.65;y<2.45;y+=.32)this.box(group,w*.3,.045,.19,wood,x,y,doorZ+.095);
+      }
+      this.box(group,.16,2.05,.2,wood,0,1.48,doorZ+.04);
+      this.addWindow(group,w*.34,wallH*.58,-doorZ,w*.16,.52,darkWood,glass);
+      for(const x of [-w*.42,w*.42])this.box(group,.13,wallH*.8,.13,darkWood,x,.52+wallH*.4,d/2+.09);
+      for(const x of [-w*.27,w*.27]){
+        const crate=new THREE.Mesh(new THREE.BoxGeometry(.8,.62,.7),wood);crate.position.set(x,.82,d*.18);group.add(crate);
+        for(let y=.58;y<1.1;y+=.22)this.box(group,.84,.035,.73,darkWood,x,y,d*.18);
+      }
     }else if(o.type==="greenhouse"){
-      this.box(group,w,.16,d,stone,0,.08,0);const frame=this.material(0x647a63);
-      for(const x of [-w/2,w/2])this.box(group,.14,h,d,frame,x,h/2,0);
-      for(const z of [-d/2,d/2])this.box(group,w,.14,.14,frame,0,h/2,z);
-      this.box(group,.12,h*.75,d,frame,0,h*.62,0);
-      const pane=new THREE.Mesh(new THREE.BoxGeometry(w-.2,h-.15,d-.2),glass);pane.position.y=h*.52;group.add(pane);
-      const ridge=this.box(group,.12,.12,d,frame,0,h+.05,0);
+      this.box(group,w+.25,.2,d+.25,stone,0,.1,0);
+      this.box(group,w-.1,h*.52,d-.1,glass,0,h*.28,0);
+      const frame=this.material(0x526b58),ridgeY=h*.88,halfW=w*.5,angle=Math.atan2(h*.36,halfW),slopeLen=Math.hypot(halfW,h*.36);
+      for(let i=0;i<=4;i++){
+        const x=-w*.48+i*w*.24;
+        this.box(group,.12,h*.72,.12,frame,x,h*.36,d*.48);
+        this.box(group,.12,h*.72,.12,frame,x,h*.36,-d*.48);
+        const left=this.box(group,slopeLen,.12,.12,frame,x-halfW*.25,h*.69,0);left.rotation.z=angle;
+        const right=this.box(group,slopeLen,.12,.12,frame,x+halfW*.25,h*.69,0);right.rotation.z=-angle;
+      }
+      this.box(group,.16,.16,d,frame,0,ridgeY,0);
+      this.box(group,.16,h*.72,.16,frame,-w*.48,h*.36,0);
+      this.box(group,.16,h*.72,.16,frame,w*.48,h*.36,0);
+      this.box(group,w*.48,.12,.12,frame,0,.25,d*.48);
+      this.box(group,w*.48,.12,.12,frame,0,.25,-d*.48);
+      const frontDoor=this.box(group,w*.22,h*.64,.11,darkWood,0,h*.34,d*.5+.06);
+      this.box(group,w*.18,h*.58,.05,glass,0,h*.34,d*.5+.13);
+      for(let row=0;row<3;row++){
+        const bed=this.box(group,w*.68,.15,.38,soil,0,.22+row*.02,(row-1)*.8);
+        for(let i=0;i<7;i++){
+          const plant=new THREE.Mesh(new THREE.SphereGeometry(.12,7,6),leaf);
+          plant.position.set((i-3)*.48,.48,(row-1)*.8);group.add(plant);
+        }
+      }
     }else if(o.type==="gazebo"){
-      this.box(group,w*.9,.25,d*.9,stone,0,.13,0);
-      for(const x of [-w*.38,w*.38])for(const z of [-d*.38,d*.38])this.box(group,.18,h*.7,.18,wood,x,h*.35,z);
-      this.box(group,w,h*.13,d,roof,0,h*.72,0);this.roof(group,w*1.08,h*.38,d*1.08,0x6b5942);
-      for(let i=0;i<5;i++){const x=-w*.34+i*w*.17;this.box(group,.08,h*.66,.08,darkWood,x,h*.34,d*.42);}
+      const platform=new THREE.Mesh(new THREE.CylinderGeometry(w*.59,w*.62,.32,6),stone);platform.position.y=.16;group.add(platform);
+      const postMat=this.material(0x805d3c),railMat=this.material(0x654a32);
+      const postRadius=w*.45;
+      for(let i=0;i<6;i++){
+        const a=i*Math.PI/3,x=Math.cos(a)*postRadius,z=Math.sin(a)*postRadius;
+        this.box(group,.2,h*.7,.2,postMat,x,h*.35,z);
+        const rail=new THREE.Mesh(new THREE.BoxGeometry(1.2,.12,.12),railMat);
+        rail.position.set(Math.cos(a+Math.PI/6)*postRadius*.88,.82,Math.sin(a+Math.PI/6)*postRadius*.88);
+        rail.rotation.y=-(a+Math.PI/6);group.add(rail);
+      }
+      const canopy=new THREE.Mesh(new THREE.ConeGeometry(w*.72,h*.34,6),roof);canopy.position.y=h*.85;group.add(canopy);
+      const eave=new THREE.Mesh(new THREE.CylinderGeometry(w*.68,w*.68,.18,6),darkWood);eave.position.y=h*.68;group.add(eave);
+      this.addBench(group,-.2,.05,0,wood,darkWood);
+      this.addBench(group,.35,-.78,Math.PI*.5,wood,darkWood);
     }else if(o.type==="firepit"){
-      const ring=new THREE.Mesh(new THREE.CylinderGeometry(w*.46,w*.5,.35,16),stone);ring.position.y=.18;group.add(ring);
-      const flame=new THREE.Mesh(new THREE.ConeGeometry(.62,1.35,7),warm);flame.position.y=1.05;group.add(flame);
-      const glow=new THREE.PointLight(0xffa64e,1.5,8);glow.position.y=1.4;group.add(glow);
+      const ground=new THREE.Mesh(new THREE.CircleGeometry(w*.72,24),new THREE.MeshStandardMaterial({color:0x88765b,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.y=.025;group.add(ground);
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(w*.36,.32,8,24),stone);ring.rotation.x=Math.PI/2;ring.position.y=.34;group.add(ring);
+      const bed=new THREE.Mesh(new THREE.CylinderGeometry(w*.31,w*.32,.18,18),soil);bed.position.y=.22;group.add(bed);
+      for(let i=0;i<12;i++){
+        const a=i*Math.PI/6;
+        const rock=new THREE.Mesh(new THREE.DodecahedronGeometry(.31,0),stone);
+        rock.position.set(Math.cos(a)*w*.36,.38,Math.sin(a)*w*.36);rock.scale.set(1,.72,.9);group.add(rock);
+      }
+      const logMat=this.material(0x65462d),ember=this.material(0xe78a38,.45,true,.9);
+      const log1=this.box(group,1.75,.24,.23,logMat,0,.45,0);log1.rotation.y=.42;
+      const log2=this.box(group,1.65,.22,.22,logMat,0,.58,0);log2.rotation.y=-.6;
+      const flameA=new THREE.Mesh(new THREE.ConeGeometry(.58,1.55,7),warm);flameA.position.y=1.35;group.add(flameA);
+      const flameB=new THREE.Mesh(new THREE.ConeGeometry(.34,1.05,6),ember);flameB.position.set(.18,1.25,.08);group.add(flameB);
+      const flameC=new THREE.Mesh(new THREE.ConeGeometry(.25,.82,6),warm);flameC.position.set(-.18,1.06,-.08);group.add(flameC);
+      const fireLight=new THREE.PointLight(0xff8a3d,2.4,12);fireLight.position.y=1.35;group.add(fireLight);
+      this.flameEffects.push({flames:[flameA,flameB,flameC],light:fireLight,phase:this.flameEffects.length*.83});
+      for(let i=0;i<4;i++){
+        const a=i*Math.PI/2;
+        this.addBench(group,Math.cos(a)*w*.92,Math.sin(a)*w*.92,a+Math.PI/2,wood,darkWood);
+      }
     }else if(o.type==="garden"){
-      for(let i=0;i<4;i++)this.box(group,w*.86,.12,.55,this.material(0x765a3b),0,.12,(i-1.5)*.95);
-      for(let i=0;i<7;i++){const x=(i-3)*.85;this.box(group,.18,1.3,.18,darkWood,x,.65,-d*.55);const crown=new THREE.Mesh(new THREE.SphereGeometry(.95,9,8),leaf);crown.position.set(x,1.9,-d*.55);group.add(crown);}
+      this.addGardenFence(group,w*.94,d*.94,darkWood);
+      for(let row=0;row<4;row++){
+        const z=(row-1.5)*.95;
+        this.box(group,w*.72,.16,.62,wood,0,.16,z);
+        this.box(group,w*.66,.12,.5,soil,0,.26,z);
+        for(let i=0;i<9;i++){
+          const x=(i-4)*.48;
+          const stem=this.box(group,.045,.42,.045,leaf,x,.5,z);
+          stem.rotation.z=(i%2?-.1:.1);
+          const crown=new THREE.Mesh(new THREE.SphereGeometry(.16,7,6),leaf);crown.position.set(x,.76,z);group.add(crown);
+        }
+      }
+      const orchard=[[-w*.34,-d*.34,.85],[-w*.12,-d*.35,.72],[w*.18,-d*.34,.8],[w*.34,d*.28,.82]];
+      orchard.forEach(([x,z,s],i)=>this.addTree(group,x,z,s,i%2===0));
+      this.box(group,w*.12,.55,.12,darkWood,w*.42,.28,-d*.42);
     }else if(o.type==="well"){
-      const base=new THREE.Mesh(new THREE.CylinderGeometry(w*.55,w*.6,.75,12),stone);base.position.y=.38;group.add(base);
-      this.box(group,.14,1.8,.14,wood,-.8,1.25,0);this.box(group,.14,1.8,.14,wood,.8,1.25,0);
-      this.box(group,2,.14,.14,darkWood,0,2.1,0);this.roof(group,2.2,.6,1.6,0x536b70);
+      const base=new THREE.Mesh(new THREE.CylinderGeometry(w*.58,w*.64,.8,12),stone);base.position.y=.4;group.add(base);
+      const lip=new THREE.Mesh(new THREE.TorusGeometry(w*.53,.12,6,20),darkWood);lip.rotation.x=Math.PI/2;lip.position.y=.82;group.add(lip);
+      const postH=2.35;
+      for(const x of [-.92,.92])this.box(group,.16,postH,.16,wood,x,postH/2+0.8,0);
+      this.beamBetween(group,{x:-.92,y:2.75,z:0},{x:.92,y:2.75,z:0},.09,darkWood);
+      const roller=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,1.95,10),darkWood);roller.rotation.z=Math.PI/2;roller.position.set(0,2.55,0);group.add(roller);
+      const crank=new THREE.Mesh(new THREE.TorusGeometry(.35,.06,6,12),wood);crank.position.set(1.12,2.55,0);crank.rotation.y=Math.PI/2;group.add(crank);
+      this.beamBetween(group,{x:1.12,y:2.55,z:0},{x:1.12,y:2.05,z:0},.07,wood);
+      this.beamBetween(group,{x:0,y:2.45,z:0},{x:0,y:1.2,z:0},.025,darkWood);
+      const bucket=new THREE.Mesh(new THREE.CylinderGeometry(.19,.14,.3,9,1,true),darkWood);bucket.position.set(0,1.05,0);group.add(bucket);
+      this.addGableRoof(group,2.35,1.9,3.05,.55,roof,.24);
     }
-    const marker=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,.08,12),warm);marker.position.set(0,.08,0);marker.userData.objectId=o.id;group.add(marker);
+    const marker=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,.08,12),warm);
+    marker.position.set(0,.09,0);marker.userData.objectId=o.id;group.add(marker);
   }
   addObject(object){
     const group=new THREE.Group();group.position.copy(this.mapPoint(object.position));group.userData.objectId=object.id;
@@ -242,5 +449,18 @@ export class WorldRenderer{
   zoomIn(){this.setZoom(this.camera.zoom*1.15)}zoomOut(){this.setZoom(this.camera.zoom/1.15)}
   reset(){this.target.set(0,0,0);this.fitCamera();}
   focusObject(id){const g=this.objectGroups.get(id);if(!g)return;this.target.set(g.position.x,0,g.position.z);this.camera.position.set(this.target.x,100/this.camera.zoom,this.target.z+36.4/this.camera.zoom);this.camera.lookAt(this.target);}
-  animate(){this.renderer.render(this.scene,this.camera);requestAnimationFrame(this.animate);}
+  animate(){
+    const time=performance.now()*.001;
+    for(const effect of this.flameEffects){
+      const pulse=1+Math.sin(time*8+effect.phase)*.075;
+      effect.flames[0].scale.set(pulse,1+Math.sin(time*10+effect.phase)*.09,pulse);
+      effect.flames[1].scale.y=1+Math.sin(time*11+effect.phase+1)*.13;
+      effect.flames[2].scale.y=1+Math.sin(time*9+effect.phase+2)*.1;
+      effect.flames[1].rotation.y=time*.7;
+      effect.flames[2].rotation.y=-time*.55;
+      effect.light.intensity=2.15+Math.sin(time*12+effect.phase)*.28;
+    }
+    this.renderer.render(this.scene,this.camera);
+    requestAnimationFrame(this.animate);
+  }
 }
