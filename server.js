@@ -2,7 +2,7 @@ const http=require("node:http");
 const fs=require("node:fs");
 const path=require("node:path");
 const ROOT=__dirname,DATA=path.join(ROOT,"data"),SAVE=path.join(DATA,"savegame.json"),PORT=4175,HOST="127.0.0.1";
-const OLLAMA_MODEL="qwen3:4b";
+const OLLAMA_MODELS=["qwen3:4b","qwen3:1.7b"];
 fs.mkdirSync(DATA,{recursive:true});
 const MIME={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"text/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".png":"image/png",".txt":"text/plain; charset=utf-8"};
 function send(res,status,body,type="application/json; charset=utf-8"){res.writeHead(status,{"Content-Type":type,"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"});res.end(body);}
@@ -12,7 +12,8 @@ async function ollamaHealth(){
   const r=await fetch("http://127.0.0.1:11434/api/tags",{signal:AbortSignal.timeout(2500)});
   if(!r.ok)throw new Error("ollama_http_"+r.status);
   const data=await r.json(),models=(data.models||[]).map(x=>x.name);
-  return {available:true,models,modelAvailable:models.some(x=>x===OLLAMA_MODEL||x.startsWith(OLLAMA_MODEL+":"))};
+  const selectedModel=OLLAMA_MODELS.find(wanted=>models.some(x=>x===wanted||x.startsWith(wanted+":")))||null;
+  return {available:true,models,modelAvailable:!!selectedModel,selectedModel,primaryModel:OLLAMA_MODELS[0],fallbackModel:OLLAMA_MODELS[1]};
 }
 const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,"http://"+HOST);
@@ -40,14 +41,14 @@ const server=http.createServer(async(req,res)=>{
       if(!message)return send(res,400,JSON.stringify({error:"empty_message"}));
       if(message.length>6000)return send(res,413,JSON.stringify({error:"message_too_long"}));
       const health=await ollamaHealth();
-      if(!health.modelAvailable)return send(res,503,JSON.stringify({error:"Модель qwen3:4b не найдена в Ollama. Загрузите её локально и повторите запрос."}));
+      if(!health.modelAvailable)return send(res,503,JSON.stringify({error:"В Ollama не найдена ни основная qwen3:4b, ни резервная qwen3:1.7b. Загрузите одну из моделей и повторите запрос."}));
       const context=JSON.stringify(payload.context||{}).slice(0,18000);
       const system="Ты интеллектуальный советник игры «У Илем». Отвечай по-русски, кратко и предметно. Анализируй только факты из переданного состояния. Явно разделяй факты, предположения и рекомендации. Не выдумывай повреждения, запасы, навыки, сроки или события. Если данных недостаточно, прямо скажи об этом. Можешь оценивать поручение, риски, ресурсы, бюджет, сроки и предлагать варианты исполнителей и плана. Ты не имеешь права создавать задачи, назначать людей, менять состояние объектов, совершать покупки или тратить деньги. Не утверждай, что совершил игровые действия. Новые проекты предлагай только если игрок прямо об этом просит. Все игровые изменения требуют отдельного подтверждения игрока. Текущее состояние игры в JSON: "+context;
-      const response=await fetch("http://127.0.0.1:11434/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:OLLAMA_MODEL,stream:false,keep_alive:"5m",messages:[{role:"system",content:system},{role:"user",content:message}],options:{num_ctx:4096,temperature:0.25}}),signal:AbortSignal.timeout(120000)});
+      const response=await fetch("http://127.0.0.1:11434/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:health.selectedModel,stream:false,keep_alive:"5m",messages:[{role:"system",content:system},{role:"user",content:message}],options:{num_ctx:4096,temperature:0.25}}),signal:AbortSignal.timeout(120000)});
       if(!response.ok)throw new Error("ollama_http_"+response.status);
       const data=await response.json(),answer=String(data.message?.content||"").replace(/<think>[\s\S]*?<\/think>/g,"").trim();
       if(!answer)throw new Error("Модель вернула пустой ответ.");
-      return send(res,200,JSON.stringify({ok:true,model:OLLAMA_MODEL,message:answer}));
+      return send(res,200,JSON.stringify({ok:true,model:health.selectedModel,message:answer}));
     }catch(error){return send(res,502,JSON.stringify({error:error.name==="TimeoutError"?"Ollama не ответила за отведённое время.":error.message}));}
   }
   if(req.method!=="GET"&&req.method!=="HEAD")return send(res,405,JSON.stringify({error:"method_not_allowed"}));
