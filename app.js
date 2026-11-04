@@ -72,37 +72,49 @@ function createTaskFromStage(stageId){
 }
 function selectObject(id){selectedId=id;renderSelected();renderTab();}
 function processWarehouseForm(form){
-  const item=(state.warehouse||[]).find(x=>x.id===form.elements.item.value);
-  const action=form.elements.action.value;
-  const rawQty=String(form.elements.quantity.value??"").trim();
-  const qty=Number(rawQty);
-  const rawPrice=String(form.elements.unitCost.value??"").trim();
-  const price=Number(rawPrice);
-  const budget=Number(state.economy?.budget);
-  if(!item||!["purchase","use"].includes(action)||!rawQty||!Number.isFinite(qty)||qty<=0||Math.round(qty*100)!==qty*100){
-    toast("Укажи корректное количество (до двух знаков после запятой).");return;
-  }
-  const stock=Number(item.quantity);
-  if(!Number.isFinite(stock)||stock<0){toast("Остаток материала повреждён. Операция отменена.");return;}
-  let total=0,nextQuantity=0,nextBudget=budget,transaction=null;
-  if(action==="purchase"){
-    if(!rawPrice||!Number.isSafeInteger(price)||price<=0){toast("Цена за единицу должна быть целым числом рублей.");return;}
-    total=Math.round(qty*price);
-    if(!Number.isSafeInteger(total)||total<=0){toast("Итоговая стоимость закупки некорректна.");return;}
-    if(!Number.isSafeInteger(budget)||budget<0||total>budget){toast("Недостаточно средств. Неприкосновенный резерв не используется.");return;}
-    nextQuantity=Math.round((stock+qty)*100)/100;
-    nextBudget=budget-total;
-    if(!Number.isFinite(nextQuantity)||nextQuantity<stock){toast("Количество после закупки выходит за допустимый диапазон.");return;}
-    transaction={id:"txn-"+crypto.randomUUID(),type:"expense",description:"Закупка: "+item.name,amount:total,createdAt:new Date().toISOString(),source:"warehouse"};
+  const action=form.elements.action.value,rawQty=String(form.elements.quantity.value??"").trim(),qty=Number(rawQty),budget=Number(state.economy?.budget);
+  if(!["purchase","use","return"].includes(action)||!rawQty||!Number.isFinite(qty)||qty<=0||Math.round(qty*100)!==qty*100){toast("Укажи корректное количество (до двух знаков после запятой).");return;}
+  if(!Number.isSafeInteger(budget)||budget<0){toast("Текущий бюджет некорректен. Операция отменена.");return;}
+  let item=null,total=0,nextQuantity=0,nextBudget=budget,transaction=null,movement=null;
+  if(action==="return"){
+    const purchaseId=form.elements.purchaseMovement?.value,purchase=(state.movements||[]).find(m=>m.id===purchaseId&&m.source==="purchase"&&m.type==="in");
+    if(!purchase){toast("Выбери исходную закупку для возврата.");return;}
+    item=(state.warehouse||[]).find(x=>x.id===purchase.itemId);
+    const purchased=Number(purchase.quantity),purchaseTotal=Number(purchase.total);
+    if(!item||!Number.isFinite(purchased)||purchased<=0||!Number.isSafeInteger(purchaseTotal)||purchaseTotal<=0){toast("Исходная закупка не содержит корректных данных. Возврат невозможен.");return;}
+    const alreadyReturned=(state.movements||[]).filter(m=>m.source==="purchase-return"&&m.purchaseMovementId===purchase.id).reduce((sum,m)=>sum+Number(m.quantity||0),0);
+    const remaining=Math.round((purchased-alreadyReturned)*100)/100;
+    if(qty>remaining){toast("Количество возврата превышает не возвращённый остаток закупки.");return;}
+    const before=Math.round(alreadyReturned*100)/100,after=Math.round((before+qty)*100)/100;
+    total=(after>=purchased?purchaseTotal:Math.round(purchaseTotal*after/purchased))-Math.round(purchaseTotal*before/purchased);
+    if(!Number.isSafeInteger(total)||total<=0){toast("Сумма возврата меньше одного рубля. Объедини возврат с большей партией.");return;}
+    const stock=Number(item.quantity);if(!Number.isFinite(stock)||stock<0){toast("Остаток материала повреждён. Возврат отменён.");return;}
+    nextQuantity=Math.round((stock+qty)*100)/100;nextBudget=budget+total;
+    if(!Number.isFinite(nextQuantity)||nextQuantity<stock||!Number.isSafeInteger(nextBudget)){toast("Возврат выводит остатки или бюджет за допустимый диапазон.");return;}
+    transaction={id:"txn-"+crypto.randomUUID(),type:"income",description:"Возврат закупки: "+item.name,amount:total,createdAt:new Date().toISOString(),source:"warehouse-return",purchaseMovementId:purchase.id};
+    movement={id:"mov-"+crypto.randomUUID(),itemId:item.id,itemName:item.name,type:"out",quantity:qty,unit:item.unit,total,createdAt:new Date().toISOString(),source:"purchase-return",purchaseMovementId:purchase.id,transactionId:transaction.id};
   }else{
-    if(qty>stock){toast("Недостаточно материала на складе.");return;}
-    nextQuantity=Math.round((stock-qty)*100)/100;
+    item=(state.warehouse||[]).find(x=>x.id===form.elements.item.value);const stock=Number(item?.quantity);
+    if(!item||!Number.isFinite(stock)||stock<0){toast("Материал или его остаток не найден. Операция отменена.");return;}
+    if(action==="purchase"){
+      const rawPrice=String(form.elements.unitCost.value??"").trim(),price=Number(rawPrice);
+      if(!rawPrice||!Number.isSafeInteger(price)||price<=0){toast("Цена за единицу должна быть целым числом рублей.");return;}
+      total=Math.round(qty*price);if(!Number.isSafeInteger(total)||total<=0){toast("Итоговая стоимость закупки некорректна.");return;}
+      if(total>budget){toast("Недостаточно средств. Неприкосновенный резерв не используется.");return;}
+      nextQuantity=Math.round((stock+qty)*100)/100;nextBudget=budget-total;
+      if(!Number.isFinite(nextQuantity)||nextQuantity<stock){toast("Количество после закупки выходит за допустимый диапазон.");return;}
+      transaction={id:"txn-"+crypto.randomUUID(),type:"expense",description:"Закупка: "+item.name,amount:total,createdAt:new Date().toISOString(),source:"warehouse"};
+      movement={id:"mov-"+crypto.randomUUID(),itemId:item.id,itemName:item.name,type:"in",quantity:qty,unit:item.unit,total,createdAt:new Date().toISOString(),source:"purchase",transactionId:transaction.id};
+    }else{
+      if(qty>stock){toast("Недостаточно материала на складе.");return;}
+      nextQuantity=Math.round((stock-qty)*100)/100;
+      movement={id:"mov-"+crypto.randomUUID(),itemId:item.id,itemName:item.name,type:"out",quantity:qty,unit:item.unit,total:0,createdAt:new Date().toISOString(),source:"manual-use"};
+    }
   }
-  const movement={id:"mov-"+crypto.randomUUID(),itemId:item.id,itemName:item.name,type:action==="purchase"?"in":"out",quantity:qty,unit:item.unit,total,createdAt:new Date().toISOString(),source:action==="purchase"?"purchase":"manual-use"};
-  item.quantity=nextQuantity;
-  if(action==="purchase"){state.economy.budget=nextBudget;state.transactions=[transaction,...(state.transactions||[])];}
+  item.quantity=nextQuantity;state.economy.budget=nextBudget;
+  if(transaction)state.transactions=[transaction,...(state.transactions||[])];
   state.movements=[movement,...(state.movements||[])];
-  scheduleSave();renderHeader();renderTab();toast(action==="purchase"?"Закупка проведена, склад и финансы обновлены.":"Материал списан со склада.");
+  scheduleSave();renderHeader();renderTab();toast(action==="purchase"?"Закупка проведена, склад и финансы обновлены.":action==="return"?"Возврат закупки проведён, склад и бюджет восстановлены.":"Материал списан со склада.");
 }
 function processFinanceForm(form){
   const type=form.elements.type.value;
@@ -228,7 +240,7 @@ function renderTab(){
   let html="";
   if(activeTab==="overview")html=`<div class="tab-summary"><div class="summary-chip"><b>${state.objects.length}</b><small>объектов на карте</small></div><div class="summary-chip"><b>${state.tasks.length}</b><small>задач в работе</small></div><div class="summary-chip"><b>${money(state.economy.budget)}</b><small>доступный бюджет</small></div><div class="summary-chip"><b>${state.warehouse.length}</b><small>категорий запасов</small></div></div><p>Выбери объект на карте или в списке. Все изменения сохраняются в общей модели мира.</p><div class="object-list">${state.objects.map(o=>`<button class="object-chip ${o.id===selectedId?"active":""}" data-select-object="${o.id}">${o.icon} ${esc(o.name)}</button>`).join("")}</div>`;
   if(activeTab==="construction")html=`<div class="object-list">${state.objects.map(o=>`<button class="object-chip ${o.id===selectedId?"active":""}" data-select-object="${o.id}">${o.icon} ${esc(o.name)} · ${esc(o.status)}</button>`).join("")}</div><div class="stage-list">${(state.buildStages||[]).map(s=>{const o=state.objects.find(x=>x.id===s.objectId),task=state.tasks.find(t=>t.id===s.taskId),reqs=s.requiredMaterials||[],locked=s.status==="done";return `<div class="stage-card"><div><b>${esc(s.title)}</b><small>${esc(o?.name||"Объект")} · ${s.workHours} ч · ${reqs.length} материалов · ${money(s.cost||0)} · ${s.progress}% · ${esc(s.status)}</small><div class="progress-track"><i style="width:${s.progress}%"></i></div><form class="stage-config" data-stage-config="${esc(s.id)}" data-locked="${locked}"><div class="stage-material-grid">${reqs.map((req,n)=>stageMaterialRow(s.id,req,n,locked)).join("")}</div>${locked?"":`<button type="button" class="secondary" data-add-material="${esc(s.id)}">＋ Добавить материал</button>`}<label>Стоимость работ, ₽ <input name="cost" type="number" min="0" step="1" value="${s.cost||0}" ${locked?"disabled":""}></label><label>Плановые трудозатраты, ч <input name="hours" type="number" min="0" step="0.5" value="${s.workHours||0}" ${locked?"disabled":""}></label>${locked?"<small>Принятый этап заблокирован для редактирования.</small>":`<button type="submit">Сохранить смету</button>`}</form></div><div class="stage-actions"><button data-stage-task="${esc(s.id)}" ${s.taskId?"disabled":""}>${s.taskId?"Задача создана":"Создать задачу"}</button>${task?.status==="done"&&s.status!=="done"?`<button data-stage-accept="${esc(s.id)}">Принять работы</button>`:""}</div></div>`}).join("")}</div><div class="actions"><button id="add-stage">＋ Новый этап для выбранного объекта</button></div><p>Смета поддерживает произвольное число позиций. Завершение задачи не списывает ресурсы: списание происходит только после приёмки.</p>`;
-  if(activeTab==="warehouse")html=`<form id="warehouse-form" class="operation-form"><label>Материал <select name="item">${state.warehouse.map(r=>`<option value="${esc(r.id)}">${esc(r.name)} · ${r.quantity} ${esc(r.unit)}</option>`).join("")}</select></label><label>Операция <select name="action"><option value="purchase">Закупить</option><option value="use">Списать</option></select></label><label>Количество <input name="quantity" type="number" min="0.01" step="0.01" value="1" required></label><label>Цена за единицу, ₽ <input name="unitCost" type="number" min="0" step="1" value="100"></label><button type="submit">Провести</button></form><div class="tab-summary">${state.warehouse.map(r=>`<div class="summary-chip"><b>${r.quantity} ${esc(r.unit)}</b><small>${esc(r.name)} · минимум ${r.minimum} · ${r.quantity<r.minimum?"ниже минимума":"норма"}</small></div>`).join("")}</div><h3>Движения склада</h3>${(state.movements||[]).slice(0,12).map(m=>`<div class="movement-row">${m.type==="in"?"＋":"−"} ${esc(m.itemName)} · ${m.quantity} ${esc(m.unit)}</div>`).join("")||"<p>Операций пока нет.</p>"}`;
+  if(activeTab==="warehouse")html=`<form id="warehouse-form" class="operation-form"><label>Материал <select name="item">${state.warehouse.map(r=>`<option value="${esc(r.id)}">${esc(r.name)} · ${r.quantity} ${esc(r.unit)}</option>`).join("")}</select></label><label>Операция <select name="action"><option value="purchase">Закупить</option><option value="use">Списать</option><option value="return">Вернуть закупку</option></select></label><label>Исходная закупка для возврата <select name="purchaseMovement"><option value="">Выбери закупку</option>${(state.movements||[]).filter(m=>m.source==="purchase"&&m.type==="in").map(m=>{const returned=(state.movements||[]).filter(x=>x.source==="purchase-return"&&x.purchaseMovementId===m.id).reduce((sum,x)=>sum+Number(x.quantity||0),0);const left=Math.round((Number(m.quantity)-returned)*100)/100;return left>0?`<option value="${esc(m.id)}">${esc(m.itemName)} · остаток ${left} ${esc(m.unit)} · ${money(m.total||0)}</option>`:"";}).join("")}</select></label><label>Количество <input name="quantity" type="number" min="0.01" step="0.01" value="1" required></label><label>Цена за единицу, ₽ <input name="unitCost" type="number" min="1" step="1" value="100"></label><button type="submit">Провести</button></form><div class="tab-summary">${state.warehouse.map(r=>{const minimum=Number(r.minimum)||0;return `<div class="summary-chip"><b>${r.quantity} ${esc(r.unit)}</b><small>${esc(r.name)} · минимум ${minimum} · ${r.quantity<minimum?"ниже минимума":"норма"}</small>${r.quantity<minimum?'<strong class="stock-warning">Нужно пополнить запас</strong>':""}</div>`;}).join("")}</div><h3>Движения склада</h3>${(state.movements||[]).slice(0,30).map(m=>`<div class="movement-row">${m.type==="in"?"＋":"−"} ${esc(m.itemName)} · ${m.quantity} ${esc(m.unit)} · ${esc(m.source||"операция")}</div>`).join("")||"<p>Операций пока нет.</p>"}`;
   if(activeTab==="people")html=`<div class="tab-summary">${state.characters.map(c=>`<div class="summary-chip"><b>${esc(c.name)}</b><small>${esc(c.role)} · энергия ${c.energy}% · принято задач: ${c.completedTasks||0} · учтено часов: ${c.workedHours||0}</small></div>`).join("")}</div><p>Учитываются только фактические часы по принятым строительным этапам. Незавершённые и непринятые задачи в статистику не попадают.</p>`;
   if(activeTab==="garden")html='<p>Сад и огород отмечены на карте как единый объект. Сезонные работы, посадки и уход будут добавляться через игровые задачи.</p>';
   if(activeTab==="projects")html='<p>Раздел проектов подготовлен как рабочее пространство для инициатив У Илем. Новые проекты интеллектуальный советник предлагает только по прямому запросу игрока.</p>';
