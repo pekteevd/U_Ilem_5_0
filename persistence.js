@@ -39,6 +39,17 @@ export async function loadState(){
 
 function storeLocalSnapshot(state,savedAt){
   try{
+    const raw=localStorage.getItem(LOCAL_KEY);
+    if(raw){
+      const current=unpack(JSON.parse(raw));
+      const incomingTime=Date.parse(savedAt||"");
+      if(current&&Number.isFinite(incomingTime)){
+        if(current.time>incomingTime)return {local:false,conflict:true,savedAt:current.savedAt,error:"stale_local_snapshot_rejected"};
+        if(current.time===incomingTime&&JSON.stringify(current.state)!==JSON.stringify(state)){
+          return {local:false,conflict:true,savedAt:current.savedAt,error:"equal_timestamp_local_conflict"};
+        }
+      }
+    }
     localStorage.setItem(LOCAL_KEY,JSON.stringify({state,savedAt}));
     return {local:true,savedAt};
   }catch(error){
@@ -62,7 +73,6 @@ export async function saveState(state){
   const savedAt=new Date().toISOString();
   if(state.meta)state.meta.lastSavedAt=savedAt;
   const snapshot=JSON.stringify(state);
-  const local=storeLocalSnapshot(state,savedAt).local;
   const request=saveQueue.catch(()=>{}).then(async()=>{
     const response=await fetch("/api/save",{method:"POST",headers:{"Content-Type":"application/json"},body:snapshot});
     if(!response.ok){
@@ -72,15 +82,21 @@ export async function saveState(state){
       error.status=response.status;error.details=details;
       throw error;
     }
-    const result=await response.json();
-    return result;
+    return await response.json();
   });
   saveQueue=request;
-  try{await request;return {ok:true,server:true,local,savedAt};}
-  catch(error){
+  try{
+    await request;
+    const localResult=storeLocalSnapshot(state,savedAt);
+    return {ok:true,server:true,local:localResult.local,localConflict:!!localResult.conflict,savedAt};
+  }catch(error){
     console.warn("Server save failed:",error);
-    if(error.status===409)saveConflict=true;
-    return {ok:local,server:false,local,conflict:error.status===409,error:error.message,serverSavedAt:error.details?.savedAt||null,savedAt};
+    if(error.status===409){
+      saveConflict=true;
+      return {ok:false,server:false,local:false,conflict:true,error:error.message,serverSavedAt:error.details?.savedAt||null,savedAt};
+    }
+    const localResult=storeLocalSnapshot(state,savedAt);
+    return {ok:localResult.local,server:false,local:localResult.local,localConflict:!!localResult.conflict,error:error.message,savedAt};
   }
 }
 
