@@ -37,3 +37,5 @@ export function createInitialState(){
     settings:{autosave:true,dayLengthMinutes:20}
   };
 }
+
+// Save migration helpers are maintained alongside the canonical world schema.
