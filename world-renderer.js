@@ -475,6 +475,7 @@ export class WorldRenderer{
     group.traverse(node=>{if(node.isMesh){node.userData.objectId=object.id;this.pickables.push(node);node.castShadow=true;node.receiveShadow=true;}});
   }
   updateObject(object){
+    if(!object.state?.components?.length)return;
     const previous=this.objectGroups.get(object.id);
     if(previous){
       const removed=new Set();previous.traverse(node=>{if(node.isMesh)removed.add(node);});
