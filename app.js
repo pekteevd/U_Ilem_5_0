@@ -46,11 +46,11 @@ function renderTasks(){
     $("calendar-list").innerHTML=[...state.tasks].sort((a,b)=>a.dueDay-b.dueDay).map(t=>'<div class="task-card"><div class="task-main"><b>День '+t.dueDay+': '+esc(t.title)+'</b><small>'+esc(state.objects.find(o=>o.id===t.objectId)?.name||"Общая задача")+'</small></div></div>').join("");
     document.querySelectorAll("[data-task-status]").forEach(el=>el.addEventListener("change",()=>{
       const t=state.tasks.find(x=>x.id===el.dataset.taskStatus);
-      if(t){if(el.value==="in_progress"&&t.ownerId&&state.tasks.some(x=>x.id!==t.id&&x.ownerId===t.ownerId&&x.status==="in_progress")){toast("Этот участник уже выполняет другую задачу.");renderTasks();return;}t.status=el.value;t.updatedAt=new Date().toISOString();const stage=(state.buildStages||[]).find(x=>x.id===t.stageId);if(stage){stage.status=el.value==="done"?"done":el.value==="in_progress"?"in_progress":el.value==="blocked"?"blocked":"planned";if(el.value==="done")stage.progress=100;}scheduleSave();renderTasks();renderSelected();renderTab();}
+      if(t){if(el.value==="in_progress"&&t.ownerId&&state.tasks.some(x=>x.id!==t.id&&x.ownerId===t.ownerId&&x.status==="in_progress")){toast("Этот участник уже выполняет другую задачу.");renderTasks();return;}t.status=el.value;t.updatedAt=new Date().toISOString();const stage=(state.buildStages||[]).find(x=>x.id===t.stageId);if(stage){stage.status=el.value==="done"?"done":el.value==="in_progress"?"in_progress":el.value==="blocked"?"blocked":"planned";stage.progress=el.value==="done"?100:el.value==="in_progress"?50:0;}scheduleSave();renderTasks();renderSelected();renderTab();}
     }));
     document.querySelectorAll("[data-task-owner]").forEach(el=>el.addEventListener("change",()=>{
       const t=state.tasks.find(x=>x.id===el.dataset.taskOwner);
-      if(t){t.ownerId=el.value||null;t.updatedAt=new Date().toISOString();scheduleSave();syncVisibleCharacters();renderSelected();}
+      if(t){const nextOwner=el.value||null;if(t.status==="in_progress"&&nextOwner&&state.tasks.some(x=>x.id!==t.id&&x.ownerId===nextOwner&&x.status==="in_progress")){toast("Этот участник уже выполняет другую задачу.");renderTasks();return;}t.ownerId=nextOwner;t.updatedAt=new Date().toISOString();scheduleSave();syncVisibleCharacters();renderSelected();}
     }));
   }
   syncVisibleCharacters();
