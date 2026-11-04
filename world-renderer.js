@@ -426,6 +426,30 @@ export class WorldRenderer{
     const marker=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,.08,12),warm);
     marker.position.set(0,.09,0);marker.userData.objectId=o.id;group.add(marker);
   }
+  assignBuildingComponents(group,object){
+    const {w,d,h}=object.dimensions;
+    const parts=object.state?.components||[];
+    const active=new Set(parts.map(part=>part.id));
+    const buckets={};
+    group.updateMatrixWorld(true);
+    group.traverse(node=>{
+      if(!node.isMesh||node.userData.isOverlay)return;
+      const world=node.getWorldPosition(new THREE.Vector3());
+      const y=world.y-group.position.y;
+      const x=world.x-group.position.x;
+      const z=world.z-group.position.z;
+      let id="walls";
+      if(y<.62)id="foundation";
+      else if(y>h*.66+.25)id="roof";
+      else if(Math.abs(z)>d*.43&&y>h*.22&&y<h*.78&&Math.abs(x)>w*.12)id="windows";
+      else if(Math.abs(z)>d*.43&&y<h*.55&&Math.abs(x)<w*.16)id="doors";
+      if(!active.has(id))id=active.has("walls")?"walls":(parts[0]?.id||"");
+      if(!id)return;
+      node.userData.componentId=id;
+      (buckets[id]||(buckets[id]=[])).push(node);
+    });
+    group.userData.componentMeshes=buckets;
+  }
   addBuildingCondition(group,object){
     const parts=object.state?.components||[];
     const condition=id=>Number(parts.find(part=>part.id===id)?.condition??100);
@@ -447,7 +471,7 @@ export class WorldRenderer{
   addObject(object){
     if(!this.mapReady){this.pendingObjects.push(object);return;}
     const group=new THREE.Group();group.position.copy(this.mapPoint(object.position));group.userData.objectId=object.id;
-    this.buildModel(group,object);this.addBuildingCondition(group,object);this.scene.add(group);this.objectGroups.set(object.id,group);
+    this.buildModel(group,object);this.assignBuildingComponents(group,object);this.addBuildingCondition(group,object);this.scene.add(group);this.objectGroups.set(object.id,group);
     group.traverse(node=>{if(node.isMesh){node.userData.objectId=object.id;this.pickables.push(node);node.castShadow=true;node.receiveShadow=true;}});
   }
   updateObject(object){
