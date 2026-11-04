@@ -52,6 +52,11 @@ jobs:
       - name: Run real Chromium and WebGL smoke test
         run: node tests/browser-scene-check.mjs
 
+      - name: Package complete project
+        run: |
+          mkdir -p artifacts
+          git archive --format=zip --output=artifacts/U_Ilem_5_0.zip HEAD
+
       - name: Upload screenshot and report
         if: always()
         uses: actions/upload-artifact@v4
