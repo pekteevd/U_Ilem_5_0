@@ -160,14 +160,14 @@ export class WorldRenderer{
     }
   }
 
-  addFacadeBattens(parent,w,h,z,material,spacing=.82){
+  addFacadeBattens(parent,w,h,z,material,spacing=.82,baseY=0){
     const count=Math.max(3,Math.floor(w/spacing));
     for(let i=0;i<=count;i++){
       const x=-w/2+(w/count)*i;
-      this.box(parent,.055,h*.94,.075,material,x,h*.5,z);
+      this.box(parent,.055,h*.94,.075,material,x,baseY+h*.5,z);
     }
-    this.box(parent,w+.12,.12,.1,material,0,h*.96,z);
-    this.box(parent,w+.12,.12,.1,material,0,h*.04,z);
+    this.box(parent,w+.12,.12,.1,material,0,baseY+h*.96,z);
+    this.box(parent,w+.12,.12,.1,material,0,baseY+h*.04,z);
   }
   addRoofRibs(parent,w,d,eaveY,rise,material,overhang=.5){
     const half=(w+overhang*2)/2,depth=d+overhang*2;
@@ -194,8 +194,8 @@ export class WorldRenderer{
     this.gableFace(group,w,wallH*.34,-d/2-.045,wood,eaveY);
     const frontZ=d/2+.09,backZ=-d/2-.09,sideX=w/2+.055;
     const siding=this.material(0x795a3c),trim=this.material(0x4d3929);
-    this.addFacadeBattens(group,w,wallH,frontZ,siding,.78);
-    this.addFacadeBattens(group,w,wallH,backZ,siding,.78);
+    this.addFacadeBattens(group,w,wallH,frontZ,siding,.78,baseH);
+    this.addFacadeBattens(group,w,wallH,backZ,siding,.78,baseH);
     for(const x of [-sideX,sideX]){
       for(let z=-d/2+.18;z<=d/2-.1;z+=.78)this.box(group,.075,wallH*.94,.055, siding,x,baseH+wallH/2,z);
       this.box(group,.11,.12,d+.12,trim,x,baseH+wallH*.96,0);
@@ -270,6 +270,9 @@ export class WorldRenderer{
       }
       const rail=new THREE.Mesh(new THREE.TorusGeometry(w*.63,.055,5,32),wood);rail.rotation.x=Math.PI/2;rail.position.y=deckY+.85;group.add(rail);
       const roofCap=new THREE.Mesh(new THREE.ConeGeometry(w*.62,h*.19,8),roof);roofCap.position.y=deckY+1.12;group.add(roofCap);
+      for(const x of [-w*.12,w*.12]){
+        this.beamBetween(group,{x,y:.72,z:w*.43},{x,y:topY-.18,z:w*.43},.045,braceMat);
+      }
       for(let y=.75;y<topY-.25;y+=.44){
         this.box(group,.62,.075,.075,wood,-w*.08,y,w*.42);
       }
@@ -286,7 +289,11 @@ export class WorldRenderer{
       this.box(group,w,wallH,d,wood,0,.52+wallH/2,0);
       this.gableFace(group,w,wallH*.38,d/2+.025,wood,eaveY);
       this.gableFace(group,w,wallH*.38,-d/2-.025,wood,eaveY);
+      const siding=this.material(0x795a3c);
+      this.addFacadeBattens(group,w,wallH,d/2+.07,siding,.62,.52);
+      this.addFacadeBattens(group,w,wallH,-d/2-.07,siding,.62,.52);
       this.addGableRoof(group,w,d,eaveY,wallH*.42,roof,.45);
+      this.addRoofRibs(group,w,d,eaveY,wallH*.42,darkWood,.45);
       const doorZ=d/2+.1;
       for(const x of [-w*.22,w*.22]){
         this.box(group,w*.34,1.95,.16,darkWood,x,1.5,doorZ);
