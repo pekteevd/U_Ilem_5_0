@@ -351,7 +351,11 @@ async function init(){
   // Ollama may be started after the game. Recheck periodically and recover without a page reload.
   setInterval(checkOllama,12000);
 
-  renderer=new WorldRenderer($("world-canvas"),$("world-viewport"),selectObject,()=>{});renderer.addObjects(state.objects);syncVisibleCharacters();
+  renderer=new WorldRenderer($("world-canvas"),$("world-viewport"),selectObject,({width,height,aspect})=>{
+    const viewport=$("world-viewport");
+    if(viewport&&width>0&&height>0)viewport.style.aspectRatio=width+" / "+height;
+  });
+  renderer.addObjects(state.objects);syncVisibleCharacters();
   $("zoom-in").addEventListener("click",()=>renderer.zoomIn());$("zoom-out").addEventListener("click",()=>renderer.zoomOut());$("reset-view").addEventListener("click",()=>renderer.reset());
   $("add-task").addEventListener("click",()=>{$("task-title").focus();$("task-title").scrollIntoView({behavior:"smooth",block:"center"});});
   $("create-task").addEventListener("click",newTask);$("task-title").addEventListener("keydown",e=>{if(e.key==="Enter")newTask();});
