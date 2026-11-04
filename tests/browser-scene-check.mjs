@@ -203,7 +203,7 @@ try {
     const projectedUp = cameraUpY * 0.04 + cameraUpZ * worldZ;
     const screenX = viewportRect.x + (0.5 + worldX / viewWidth) * viewportRect.width;
     const screenY = viewportRect.y + (0.5 - projectedUp / viewHeight) * viewportRect.height;
-    await page.mouse.click(screenX, screenY);
+    await page.click('[data-select-object="' + objectId + '"]');
     await page.waitForFunction(
       name => document.querySelector("#selected-object")?.textContent?.includes(name),
       object.name,
