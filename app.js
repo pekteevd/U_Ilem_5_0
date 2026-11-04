@@ -58,13 +58,18 @@ function renderTasks(){
 function syncVisibleCharacters(){
   if(renderer?.syncCharacters)renderer.syncCharacters(state.characters,state.tasks,state.objects);
 }
+function createTaskFromStage(stageId){
+  const stage=(state.buildStages||[]).find(s=>s.id===stageId);if(!stage||stage.taskId)return;
+  const task={id:"task-"+crypto.randomUUID(),title:stage.title,objectId:stage.objectId,stageId:stage.id,source:"construction",ownerId:null,dueDay:state.meta.day+1,priority:"normal",status:"planned",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+  state.tasks.push(task);stage.taskId=task.id;scheduleSave();renderTasks();renderSelected();renderTab();toast("Этап добавлен на общую доску задач.");
+}
 function selectObject(id){selectedId=id;renderSelected();renderTab();}
 function renderTab(){
   const titles={overview:["Обзор территории","состояние хозяйства"],construction:["Строительство","объекты и состояние"],warehouse:["Склад","остатки и минимальные запасы"],people:["Люди","команда и роли"],garden:["Сад","зелёная зона"],projects:["Проекты","инициативы пространства"],guests:["Гости и события","приём и календарь"],finance:["Финансы","бюджет и резерв"],chronicle:["Хроника","история изменений"],calendar:["Календарь","планирование по игровым дням"],territory:["Территория","участки и размещение"],engineering:["Инженерия","вода, электричество и отопление"],experts:["Специалисты","внешние специалисты и приглашения"]};
   $("tab-title").textContent=titles[activeTab][0];$("tab-caption").textContent=titles[activeTab][1];
   let html="";
   if(activeTab==="overview")html=`<div class="tab-summary"><div class="summary-chip"><b>${state.objects.length}</b><small>объектов на карте</small></div><div class="summary-chip"><b>${state.tasks.length}</b><small>задач в работе</small></div><div class="summary-chip"><b>${money(state.economy.budget)}</b><small>доступный бюджет</small></div><div class="summary-chip"><b>${state.warehouse.length}</b><small>категорий запасов</small></div></div><p>Выбери объект на карте или в списке. Все изменения сохраняются в общей модели мира.</p><div class="object-list">${state.objects.map(o=>`<button class="object-chip ${o.id===selectedId?"active":""}" data-select-object="${o.id}">${o.icon} ${esc(o.name)}</button>`).join("")}</div>`;
-  if(activeTab==="construction")html=`<div class="object-list">${state.objects.map(o=>`<button class="object-chip ${o.id===selectedId?"active":""}" data-select-object="${o.id}">${o.icon} ${esc(o.name)} · ${esc(o.status)}</button>`).join("")}</div><p>Строительные этапы, осмотры и дефекты будут привязываться к выбранному объекту. Пока доступно создание связанных задач.</p>`;
+  if(activeTab==="construction")html=`<div class="object-list">${state.objects.map(o=>`<button class="object-chip ${o.id===selectedId?"active":""}" data-select-object="${o.id}">${o.icon} ${esc(o.name)} · ${esc(o.status)}</button>`).join("")}</div><div class="stage-list">${(state.buildStages||[]).map(s=>{const o=state.objects.find(x=>x.id===s.objectId);return `<div class="stage-card"><div><b>${esc(s.title)}</b><small>${esc(o?.name||"Объект")} · ${s.workHours} ч · ${s.progress}%</small><div class="progress-track"><i style="width:${s.progress}%"></i></div></div><button data-stage-task="${esc(s.id)}" ${s.taskId?"disabled":""}>${s.taskId?"Задача создана":"Создать задачу"}</button></div>`}).join("")}</div><p>Этапы связаны с объектами и общей доской задач. Осмотр не предполагает заранее наличие дефектов.</p>`;
   if(activeTab==="warehouse")html=`<div class="tab-summary">${state.warehouse.map(r=>`<div class="summary-chip"><b>${r.quantity} ${esc(r.unit)}</b><small>${esc(r.name)} · минимум ${r.minimum}</small></div>`).join("")}</div>`;
   if(activeTab==="people")html=`<div class="tab-summary">${state.characters.map(c=>`<div class="summary-chip"><b>${esc(c.name)}</b><small>${esc(c.role)} · энергия ${c.energy}%</small></div>`).join("")}</div>`;
   if(activeTab==="garden")html='<p>Сад и огород отмечены на карте как единый объект. Сезонные работы, посадки и уход будут добавляться через игровые задачи.</p>';
@@ -78,6 +83,7 @@ function renderTab(){
   if(activeTab==="chronicle")html=state.tasks.length?state.tasks.slice().reverse().map(t=>`<div class="summary-chip"><b>${esc(t.title)}</b><small>день ${t.dueDay} · ${esc(t.status)}</small></div>`).join(""):'<p>История хозяйственных событий пока пуста.</p>';
   $("tab-content").innerHTML=html;
   document.querySelectorAll("[data-select-object]").forEach(el=>el.addEventListener("click",()=>selectObject(el.dataset.selectObject)));
+  document.querySelectorAll("[data-stage-task]").forEach(el=>el.addEventListener("click",()=>createTaskFromStage(el.dataset.stageTask)));
   $("calendar-next-day")?.addEventListener("click",()=>{state.meta.day++;scheduleSave();renderHeader();renderTab();});
   $("calendar-next-month")?.addEventListener("click",()=>{state.meta.day+=30;const seasons=["Весна","Лето","Осень","Зима"];const i=seasons.indexOf(state.meta.season);state.meta.season=seasons[(i+1)%4];scheduleSave();renderHeader();renderTab();});
 
