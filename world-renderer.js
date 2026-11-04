@@ -99,15 +99,15 @@ export class WorldRenderer{
     this.box(parent,.2,.24,depth,roofMaterial,0,eaveY+rise,0);
     this.box(parent,.16,.18,depth,roofMaterial,0,eaveY-.02,0);
   }
-  addBench(parent,x,z,rotation=0,woodMaterial=null,darkMaterial=null){
+  addBench(parent,x,z,rotation=0,woodMaterial=null,darkMaterial=null,scale=1){
     const bench=new THREE.Group();
     const wood=woodMaterial||this.material(0x8b6743);
     const dark=darkMaterial||this.material(0x51402e);
-    this.box(bench,2.15,.16,.48,wood,0,.62,0);
-    this.box(bench,2.15,.78,.14,wood,0,1.02,-.18);
+    this.box(bench,2.15*scale,.16*scale,.48*scale,wood,0,.62*scale,0);
+    this.box(bench,2.15*scale,.78*scale,.14*scale,wood,0,1.02*scale,-.18*scale);
     for(const px of [-.88,.88]){
-      this.box(bench,.13,.62,.13,dark,px,.31,0);
-      this.box(bench,.13,.72,.13,dark,px,1.0,-.16);
+      this.box(bench,.13*scale,.62*scale,.13*scale,dark,px*scale,.31*scale,0);
+      this.box(bench,.13*scale,.72*scale,.13*scale,dark,px*scale,1.0*scale,-.16*scale);
     }
     bench.position.set(x,0,z);bench.rotation.y=rotation;parent.add(bench);
     return bench;
@@ -170,8 +170,11 @@ export class WorldRenderer{
     this.box(group,w*.21,wallH*.66,.16,darkWood,0,baseH+wallH*.33,frontZ+.035);
     this.box(group,w*.12,.08,.055,warm,w*.045,baseH+wallH*.48,frontZ+.13);
     this.addGableRoof(group,w,d,eaveY,wallH*.42,roof,.55);
-    this.box(group,.5,1.25,.5,stone,w*.28,eaveY+wallH*.34,-d*.22);
-    this.box(group,.62,.15,.62,darkWood,w*.28,eaveY+wallH*.77,-d*.22);
+    const roofRise=wallH*.42,roofHalf=(w+.55*2)/2;
+    const chimneyRoofY=eaveY+roofRise*(1-(w*.28)/roofHalf);
+    const chimneyTop=chimneyRoofY+.68;
+    this.box(group,.46,1.12,.46,stone,w*.28,chimneyTop-.56,-d*.22);
+    this.box(group,.58,.14,.58,darkWood,w*.28,chimneyTop+.06,-d*.22);
     const porchZ=d*.68;
     this.box(group,w*.76,.18,d*.48,darkWood,0,.54,porchZ);
     for(const x of [-w*.32,w*.32]){
@@ -252,35 +255,41 @@ export class WorldRenderer{
         for(let y=.58;y<1.1;y+=.22)this.box(group,.84,.035,.73,darkWood,x,y,d*.18);
       }
     }else if(o.type==="greenhouse"){
-      this.box(group,w+.25,.2,d+.25,stone,0,.1,0);
-      this.box(group,w-.1,h*.52,.055,glass,0,h*.28,d*.49);
-      this.box(group,w-.1,h*.52,.055,glass,0,h*.28,-d*.49);
-      this.box(group,.055,h*.52,d-.1,glass,w*.49,h*.28,0);
-      this.box(group,.055,h*.52,d-.1,glass,-w*.49,h*.28,0);
-      const frame=this.material(0x526b58),ridgeY=h*.88,halfW=w*.5,angle=Math.atan2(h*.36,halfW),slopeLen=Math.hypot(halfW,h*.36);
+      const frame=this.material(0x526b58),ridgeY=h*.88,halfW=w*.48;
+      const slopeRise=h*.30,angle=Math.atan2(slopeRise,halfW),slopeLen=Math.hypot(halfW,slopeRise);
+      this.box(group,w+.24,.2,d+.24,stone,0,.1,0);
+      // Four transparent wall planes. Each is a separate thin surface, not a solid glass block.
+      this.box(group,w-.12,h*.52,.055,glass,0,h*.28,d*.49);
+      this.box(group,w-.12,h*.52,.055,glass,0,h*.28,-d*.49);
+      this.box(group,.055,h*.52,d-.12,glass,halfW,h*.28,0);
+      this.box(group,.055,h*.52,d-.12,glass,-halfW,h*.28,0);
+      // Two roof panes run along the greenhouse length and meet at the ridge.
+      const leftPane=this.box(group,slopeLen,.055,d-.14,glass,-halfW*.5,h*.73,0);leftPane.rotation.z=angle;
+      const rightPane=this.box(group,slopeLen,.055,d-.14,glass,halfW*.5,h*.73,0);rightPane.rotation.z=-angle;
+      // Transverse ribs are repeated down the length (Z), each following the gable profile.
       for(let i=0;i<=4;i++){
-        const x=-w*.48+i*w*.24;
-        this.box(group,.12,h*.72,.12,frame,x,h*.36,d*.48);
-        this.box(group,.12,h*.72,.12,frame,x,h*.36,-d*.48);
-        const leftPane=this.box(group,slopeLen,.055,d-.16,glass,x-halfW*.25,h*.69,0);leftPane.rotation.z=angle;
-        const rightPane=this.box(group,slopeLen,.055,d-.16,glass,x+halfW*.25,h*.69,0);rightPane.rotation.z=-angle;
-        const left=this.box(group,slopeLen,.12,.12,frame,x-halfW*.25,h*.69,0);left.rotation.z=angle;
-        const right=this.box(group,slopeLen,.12,.12,frame,x+halfW*.25,h*.69,0);right.rotation.z=-angle;
+        const z=-d*.46+i*d*.23;
+        this.beamBetween(group,{x:-halfW,y:.18,z},{x:-halfW,y:h*.58,z},.075,frame);
+        this.beamBetween(group,{x:halfW,y:.18,z},{x:halfW,y:h*.58,z},.075,frame);
+        this.beamBetween(group,{x:-halfW,y:h*.58,z},{x:0,y:ridgeY,z},.095,frame);
+        this.beamBetween(group,{x:0,y:ridgeY,z},{x:halfW,y:h*.58,z},.095,frame);
+        this.box(group,.09,.09,.09,frame,0,ridgeY,z);
       }
-      this.gableFace(group,w,h*.3,d*.49,glass,h*.58);
-      this.gableFace(group,w,h*.3,-d*.49,glass,h*.58);
-      this.box(group,.16,.16,d,frame,0,ridgeY,0);
-      this.box(group,.16,h*.72,.16,frame,-w*.48,h*.36,0);
-      this.box(group,.16,h*.72,.16,frame,w*.48,h*.36,0);
-      this.box(group,w*.48,.12,.12,frame,0,.25,d*.48);
-      this.box(group,w*.48,.12,.12,frame,0,.25,-d*.48);
-      const frontDoor=this.box(group,w*.22,h*.64,.11,darkWood,0,h*.34,d*.5+.06);
-      this.box(group,w*.18,h*.58,.05,glass,0,h*.34,d*.5+.13);
+      this.box(group,.13,.13,d,frame,0,ridgeY,0);
+      this.box(group,.1,.1,d,frame,-halfW,h*.58,0);
+      this.box(group,.1,.1,d,frame,halfW,h*.58,0);
+      // Gabled transparent end faces.
+      this.gableFace(group,w-.12,h*.30,d*.49,glass,h*.58);
+      this.gableFace(group,w-.12,h*.30,-d*.49,glass,h*.58);
+      // Entrance door and three interior planting beds.
+      this.box(group,w*.2,h*.62,.09,darkWood,0,h*.34,d*.5+.055);
+      this.box(group,w*.15,h*.57,.045,glass,0,h*.34,d*.5+.11);
       for(let row=0;row<3;row++){
-        const bed=this.box(group,w*.68,.15,.38,soil,0,.22+row*.02,(row-1)*.8);
+        const z=(row-1)*.78;
+        this.box(group,w*.68,.15,.34,soil,0,.22,z);
         for(let i=0;i<7;i++){
           const plant=new THREE.Mesh(new THREE.SphereGeometry(.12,7,6),leaf);
-          plant.position.set((i-3)*.48,.48,(row-1)*.8);group.add(plant);
+          plant.position.set((i-3)*.48,.48,z);group.add(plant);
         }
       }
     }else if(o.type==="gazebo"){
@@ -317,7 +326,7 @@ export class WorldRenderer{
       this.flameEffects.push({flames:[flameA,flameB,flameC],light:fireLight,phase:this.flameEffects.length*.83});
       for(let i=0;i<4;i++){
         const a=i*Math.PI/2;
-        this.addBench(group,Math.cos(a)*w*.65,Math.sin(a)*w*.65,a+Math.PI/2,wood,darkWood);
+        this.addBench(group,Math.cos(a)*w*.38,Math.sin(a)*w*.38,a+Math.PI/2,wood,darkWood,.42);
       }
     }else if(o.type==="garden"){
       this.addGardenFence(group,w*.94,d*.94,darkWood);
@@ -336,17 +345,25 @@ export class WorldRenderer{
       orchard.forEach(([x,z,s],i)=>this.addTree(group,x,z,s,i%2===0));
       this.box(group,w*.12,.55,.12,darkWood,w*.42,.28,-d*.42);
     }else if(o.type==="well"){
-      const base=new THREE.Mesh(new THREE.CylinderGeometry(w*.58,w*.64,.8,12),stone);base.position.y=.4;group.add(base);
-      const lip=new THREE.Mesh(new THREE.TorusGeometry(w*.53,.12,6,20),darkWood);lip.rotation.x=Math.PI/2;lip.position.y=.82;group.add(lip);
-      const postH=2.35;
-      for(const x of [-.92,.92])this.box(group,.16,postH,.16,wood,x,postH/2+0.8,0);
-      this.beamBetween(group,{x:-.92,y:2.75,z:0},{x:.92,y:2.75,z:0},.09,darkWood);
-      const roller=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,1.95,10),darkWood);roller.rotation.z=Math.PI/2;roller.position.set(0,2.55,0);group.add(roller);
-      const crank=new THREE.Mesh(new THREE.TorusGeometry(.35,.06,6,12),wood);crank.position.set(1.12,2.55,0);crank.rotation.y=Math.PI/2;group.add(crank);
-      this.beamBetween(group,{x:1.12,y:2.55,z:0},{x:1.12,y:2.05,z:0},.07,wood);
-      this.beamBetween(group,{x:0,y:2.45,z:0},{x:0,y:1.2,z:0},.025,darkWood);
-      const bucket=new THREE.Mesh(new THREE.CylinderGeometry(.19,.14,.3,9,1,true),darkWood);bucket.position.set(0,1.05,0);group.add(bucket);
-      this.addGableRoof(group,2.35,1.9,3.05,.55,roof,.24);
+      const radius=Math.min(w,d)*.43;
+      const base=new THREE.Mesh(new THREE.CylinderGeometry(radius*.94,radius,.55,12),stone);
+      base.position.y=.275;group.add(base);
+      const lip=new THREE.Mesh(new THREE.TorusGeometry(radius*.84,.10,6,20),darkWood);
+      lip.rotation.x=Math.PI/2;lip.position.y=.58;group.add(lip);
+      const postX=w*.36,postHeight=h*.55,postBase=.58,postTop=postBase+postHeight;
+      for(const x of [-postX,postX])this.box(group,.14,postHeight,.14,wood,x,postBase+postHeight/2,0);
+      this.beamBetween(group,{x:-postX,y:postTop,z:0},{x:postX,y:postTop,z:0},.085,darkWood);
+      const rollerY=postTop-.18;
+      const roller=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,w*.92,10),darkWood);
+      roller.rotation.z=Math.PI/2;roller.position.set(0,rollerY,0);group.add(roller);
+      const crank=new THREE.Mesh(new THREE.TorusGeometry(.29,.05,6,12),wood);
+      crank.position.set(postX+.16,rollerY,0);crank.rotation.y=Math.PI/2;group.add(crank);
+      this.beamBetween(group,{x:postX+.16,y:rollerY,z:0},{x:postX+.16,y:rollerY-.42,z:0},.06,wood);
+      this.beamBetween(group,{x:0,y:rollerY-.1,z:0},{x:0,y:.9,z:0},.022,darkWood);
+      const bucket=new THREE.Mesh(new THREE.CylinderGeometry(.16,.12,.27,9,1,true),darkWood);
+      bucket.position.set(0,.78,0);group.add(bucket);
+      this.addGableRoof(group,w*.98,d*.98,postTop+.04,h*.16,roof,.08);
+    }
     }
     const marker=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,.08,12),warm);
     marker.position.set(0,.09,0);marker.userData.objectId=o.id;group.add(marker);
