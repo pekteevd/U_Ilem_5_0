@@ -168,6 +168,7 @@ async function init(){
 
   renderHeader();renderTasks();renderSelected();renderTabs();
   $("local-status").textContent="готово";$("server-status").textContent=loaded.source==="server"?"загружено":"ожидание";
+  if(loaded.source==="browser")scheduleSave();
   await checkOllama();
   // Ollama may be started after the game. Recheck periodically and recover without a page reload.
   setInterval(checkOllama,12000);
