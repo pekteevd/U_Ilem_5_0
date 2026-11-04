@@ -11,6 +11,20 @@ function safePath(urlPath){const decoded=decodeURIComponent(urlPath.split("?")[0
 function readBody(req,limit=120000){return new Promise((resolve,reject)=>{let body="";req.on("data",chunk=>{body+=chunk;if(body.length>limit){reject(new Error("request_too_large"));req.destroy();}});req.on("end",()=>resolve(body));req.on("error",reject);});}
 function validSavePayload(payload){const state=payload?.state||payload;return !!state&&state.schemaVersion===1&&Array.isArray(state.objects)&&Array.isArray(state.tasks)&&!!state.economy;}
 function readValidSave(file){try{if(!fs.existsSync(file))return null;const raw=fs.readFileSync(file,"utf8"),payload=JSON.parse(raw);return validSavePayload(payload)?{raw,payload,state:payload.state||payload}:null;}catch{return null;}}
+function compareSaveVersions(incomingState,current){
+  const incomingTime=Date.parse(incomingState.meta?.lastSavedAt||"");
+  if(!Number.isFinite(incomingTime))return {accept:false,reason:"invalid_save_timestamp"};
+  if(!current)return {accept:true};
+  const currentTime=Date.parse(current.state.meta?.lastSavedAt||"");
+  if(!Number.isFinite(currentTime))return {accept:true};
+  const savedAt=current.payload.savedAt||current.state.meta.lastSavedAt;
+  if(incomingTime<currentTime)return {accept:false,reason:"stale_save_rejected",savedAt};
+  if(incomingTime===currentTime){
+    if(JSON.stringify(incomingState)===JSON.stringify(current.state))return {accept:true,idempotent:true,savedAt};
+    return {accept:false,reason:"stale_save_rejected",savedAt};
+  }
+  return {accept:true};
+}
 async function ollamaHealth(){
   const r=await fetch("http://127.0.0.1:11434/api/tags",{signal:AbortSignal.timeout(2500)});
   if(!r.ok)throw new Error("ollama_http_"+r.status);
@@ -48,21 +62,13 @@ const server=http.createServer(async(req,res)=>{
     // Serialize comparison, backup rotation and replacement as one operation.
     const persist=saveWriteQueue.catch(()=>{}).then(()=>{
       const current=readValidSave(SAVE)||readValidSave(SAVE_BACKUP);
-      const incomingTime=Date.parse(state.meta?.lastSavedAt||"");
-      const currentTime=current?Date.parse(current.state.meta?.lastSavedAt||""):NaN;
-      if(Number.isFinite(incomingTime)&&Number.isFinite(currentTime)){
-        if(incomingTime<currentTime){
-          const error=new Error("stale_save_rejected");
-          error.savedAt=current.payload.savedAt||current.state.meta.lastSavedAt;
-          throw error;
-        }
-        if(incomingTime===currentTime){
-          if(JSON.stringify(state)===JSON.stringify(current.state))return {ok:true,savedAt:current.payload.savedAt||current.state.meta.lastSavedAt,idempotent:true};
-          const error=new Error("stale_save_rejected");
-          error.savedAt=current.payload.savedAt||current.state.meta.lastSavedAt;
-          throw error;
-        }
+      const versionCheck=compareSaveVersions(state,current);
+      if(!versionCheck.accept){
+        const error=new Error(versionCheck.reason);
+        error.savedAt=versionCheck.savedAt||null;
+        throw error;
       }
+      if(versionCheck.idempotent)return {ok:true,savedAt:versionCheck.savedAt,idempotent:true};
       const savedAt=new Date().toISOString();
       const temp=SAVE+".tmp";
       fs.writeFileSync(temp,JSON.stringify({state,savedAt}),"utf8");
