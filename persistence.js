@@ -1,5 +1,6 @@
 const LOCAL_KEY="u_ilem_5_0_save_v1";
 let saveQueue=Promise.resolve();
+let saveConflict=false;
 
 function valid(state){
   return !!state&&state.schemaVersion===1&&Array.isArray(state.objects)&&Array.isArray(state.tasks)&&!!state.economy;
@@ -37,6 +38,7 @@ export async function loadState(){
 }
 
 export async function saveState(state){
+  if(saveConflict)return {ok:false,server:false,local:false,conflict:true,error:"stale_save_rejected"};
   if(!valid(state))return {ok:false,server:false,local:false,error:"invalid_state_schema"};
   const savedAt=new Date().toISOString();
   if(state.meta)state.meta.lastSavedAt=savedAt;
@@ -60,6 +62,7 @@ export async function saveState(state){
   try{await request;return {ok:true,server:true,local,savedAt};}
   catch(error){
     console.warn("Server save failed:",error);
+    if(error.status===409)saveConflict=true;
     return {ok:local,server:false,local,conflict:error.status===409,error:error.message,serverSavedAt:error.details?.savedAt||null,savedAt};
   }
 }
