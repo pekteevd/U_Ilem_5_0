@@ -1,0 +1,5 @@
+Three.js r180
+Source: https://github.com/mrdoob/three.js/tree/r180
+License: MIT, see THREE_LICENSE.txt
+Files: three.module.js + three.core.js
+Runtime: local files only; no CDN dependency.

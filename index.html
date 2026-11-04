@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#18231c">
+  <title>У Илем 5.0</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">У</span><div><strong>У Илем</strong><small>пространство новой жизни · 5.0</small></div></div>
+      <div class="top-stats">
+        <div><small>День</small><strong id="game-day">1 · Весна</strong></div>
+        <div><small>Бюджет</small><strong id="budget">2 000 000 ₽</strong></div>
+        <div><small>Резерв</small><strong id="reserve">500 000 ₽</strong></div>
+        <div class="save-state" id="save-state">Загрузка…</div>
+      </div>
+    </header>
+    <main class="layout">
+      <aside class="left-panel">
+        <section class="panel-block">
+          <div class="section-heading"><span>Пространство</span><span class="subtle">объекты</span></div>
+          <div id="object-list" class="object-list"></div>
+        </section>
+        <section class="panel-block resource-block">
+          <div class="section-heading"><span>Склад</span><span class="subtle">стартовые остатки</span></div>
+          <div id="resource-list"></div>
+        </section>
+        <section class="panel-block">
+          <div class="section-heading"><span>Команда</span><span class="subtle">настройка позже</span></div>
+          <div class="team-line"><span class="avatar">Д</span><span><b>Дмитрий</b><small>координатор</small></span><i>●</i></div>
+          <div class="team-line"><span class="avatar">Т</span><span><b>Татьяна</b><small>участник команды</small></span><i>●</i></div>
+        </section>
+      </aside>
+      <section class="world-section">
+        <div class="world-toolbar">
+          <div><strong>Территория У Илем</strong><small>Колесо мыши: масштаб · перетаскивание: обзор · щелчок: объект</small></div>
+          <div class="toolbar-actions">
+            <button id="zoom-out" title="Отдалить">−</button><button id="zoom-in" title="Приблизить">+</button><button id="reset-view" class="quiet">Сбросить вид</button><button id="export-save" class="quiet">Экспорт сохранения</button>
+          </div>
+        </div>
+        <div id="world-viewport">
+          <div id="map-loading">Загрузка утверждённой карты…</div>
+          <canvas id="world-canvas"></canvas>
+          <div class="map-legend"><span><i class="legend-dot"></i> интерактивные объекты</span><span>Карта: утверждённый оригинал</span></div>
+        </div>
+        <div class="bottom-panels">
+          <section class="mini-panel">
+            <div class="section-heading"><span>Общие задачи</span><span id="task-count" class="subtle">0</span></div>
+            <div id="task-list" class="task-list"><div class="empty-state">Пока нет задач. Выбери объект и добавь первую.</div></div>
+          </section>
+          <section class="mini-panel calendar-panel">
+            <div class="section-heading"><span>Календарь</span><span class="subtle">тот же список задач</span></div>
+            <div id="calendar-list" class="calendar-list"><div class="empty-state">Запланированные задачи появятся здесь.</div></div>
+          </section>
+        </div>
+      </section>
+      <aside class="right-panel">
+        <section class="panel-block object-details">
+          <div class="section-heading"><span>Карточка объекта</span><span id="object-kind" class="subtle">не выбран</span></div>
+          <div id="selected-object" class="selected-object">
+            <div class="object-placeholder">⌖</div>
+            <h2>Выбери объект на карте</h2>
+            <p>У каждого объекта будет собственное состояние, история, осмотры, этапы и связанные задачи.</p>
+          </div>
+          <div id="object-actions" class="object-actions" hidden>
+            <button id="add-task" class="primary">＋ Создать задачу</button>
+            <button id="focus-object" class="secondary">Показать на карте</button>
+          </div>
+        </section>
+        <section class="panel-block task-create">
+          <div class="section-heading"><span>Новая задача</span><span class="subtle">единая модель</span></div>
+          <label for="task-title">Что нужно сделать?</label>
+          <input id="task-title" type="text" placeholder="Например, осмотреть крышу">
+          <label for="task-due">День выполнения</label>
+          <input id="task-due" type="number" min="1" value="2">
+          <button id="create-task" class="primary full">Добавить задачу</button>
+          <p class="hint" id="task-hint">Сначала выбери объект, чтобы связать задачу с ним.</p>
+        </section>
+        <section class="panel-block">
+          <div class="section-heading"><span>Состояние проекта</span></div>
+          <div class="system-line"><span>Локальное сохранение</span><b id="local-status">проверка</b></div>
+          <div class="system-line"><span>Сервер сохранений</span><b id="server-status">проверка</b></div>
+          <div class="system-line"><span>Ollama</span><b id="ollama-status">не проверена</b></div>
+          <p class="hint">ИИ подключается отдельно и не влияет на запуск базовой игры.</p>
+        </section>
+      </aside>
+    </main>
+    <div id="toast" class="toast" role="status"></div>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
