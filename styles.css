@@ -145,3 +145,6 @@ textarea{resize:vertical;min-height:48px}
  .task-create{flex-wrap:wrap}
  .task-create input:first-child{flex-basis:100%}
 }
+.task-controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.task-controls label{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)}
+.task-controls select{max-width:190px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;background:#fffaf0;color:var(--ink)}
