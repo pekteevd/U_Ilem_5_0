@@ -66,7 +66,12 @@ function addStageForSelected(){
   state.buildStages=state.buildStages||[];state.buildStages.push(stage);scheduleSave();renderSelected();renderTab();toast("Этап добавлен.");
 }
 function createTaskFromStage(stageId){
-  const stage=(state.buildStages||[]).find(s=>s.id===stageId);if(!stage||stage.taskId)return;
+  const stage=(state.buildStages||[]).find(s=>s.id===stageId);
+  if(!stage||stage.taskId)return;
+  if(!(state.objects||[]).some(o=>o.id===stage.objectId)){
+    toast("Нельзя создать задачу: связанный объект не найден.");
+    return;
+  }
   const task={id:"task-"+crypto.randomUUID(),title:stage.title,objectId:stage.objectId,stageId:stage.id,source:"construction",ownerId:null,dueDay:state.meta.day+1,priority:"normal",status:"planned",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
   state.tasks.push(task);stage.taskId=task.id;scheduleSave();renderTasks();renderSelected();renderTab();toast("Этап добавлен на общую доску задач.");
 }
@@ -144,8 +149,12 @@ function acceptBuildStage(stageId){
   const stage=(state.buildStages||[]).find(x=>x.id===stageId);
   const task=stage&&(state.tasks||[]).find(t=>t.id===stage.taskId);
   const object=stage&&(state.objects||[]).find(o=>o.id===stage.objectId);
-  if(!stage||!task||task.status!=="done"||!object){
-    toast("Сначала заверши связанную задачу и проверь объект.");
+  if(!stage||!task||task.status!=="done"||!object||task.stageId!==stage.id||task.objectId!==stage.objectId||task.source!=="construction"){
+    toast("Связанная задача или объект не соответствует строительному этапу.");
+    return;
+  }
+  if(!Array.isArray(state.warehouse)||!Array.isArray(state.movements||[])||!Array.isArray(state.transactions||[])||!Array.isArray(object.history||[])||(object.state!=null&&(typeof object.state!=="object"||Array.isArray(object.state)))){
+    toast("Структура склада, финансового журнала или истории объекта повреждена. Приёмка отменена.");
     return;
   }
   if(stage.status==="done"||stage.acceptedAt){
