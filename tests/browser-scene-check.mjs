@@ -195,6 +195,29 @@ try {
     objectSelections.push(object.name);
   }
 
+  const closeupScreenshots = [];
+  for (const objectId of ["house-main","greenhouse","lighthouse"]) {
+    const object = WORLD_OBJECTS.find(item => item.id === objectId);
+    const worldX = (object.position.x - 0.5) * mapWidth;
+    const worldZ = (object.position.y - 0.5) * mapHeight;
+    const projectedUp = cameraUpY * 0.04 + cameraUpZ * worldZ;
+    const screenX = viewportRect.x + (0.5 + worldX / viewWidth) * viewportRect.width;
+    const screenY = viewportRect.y + (0.5 - projectedUp / viewHeight) * viewportRect.height;
+    await page.mouse.click(screenX, screenY);
+    await page.waitForFunction(
+      name => document.querySelector("#selected-object")?.textContent?.includes(name),
+      object.name,
+      { timeout: 3000 }
+    );
+    await page.click("#focus-object");
+    for (let step = 0; step < 5; step++) await page.click("#zoom-in");
+    await page.waitForTimeout(500);
+    const screenshotName = `detail-${objectId}.png`;
+    await page.screenshot({ path: path.join(out, screenshotName), fullPage: true });
+    closeupScreenshots.push(screenshotName);
+    await page.click("#reset-view");
+  }
+
   await page.click("#focus-object");
   const canvasRect = await page.locator("#world-canvas").boundingBox();
   await page.mouse.move(canvasRect.x + canvasRect.width * 0.22, canvasRect.y + canvasRect.height * 0.24);
@@ -214,6 +237,7 @@ try {
     mapResponses,
     constructionTabVisible,
     objectSelections,
+    closeupScreenshots,
     migrationTest,
     footprintCheck,
     httpErrors,
