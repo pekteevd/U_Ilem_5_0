@@ -22,7 +22,8 @@ export class WorldRenderer{
     this.scene.add(new THREE.HemisphereLight(0xfff3df,0x70563f,2.1));
     const sun=new THREE.DirectionalLight(0xffe5bd,2.6);sun.position.set(-35,65,-35);sun.castShadow=true;
     sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-65;sun.shadow.camera.right=65;sun.shadow.camera.top=65;sun.shadow.camera.bottom=-65;
-    sun.shadow.bias=-.00025;this.scene.add(sun);\n    const fill=new THREE.DirectionalLight(0xffe3c2,.95);fill.position.set(35,42,58);this.scene.add(fill);
+    sun.shadow.bias=-.00025;this.scene.add(sun);
+    const fill=new THREE.DirectionalLight(0xffe3c2,.95);fill.position.set(35,42,58);this.scene.add(fill);
   }
   loadMap(){
     const loader=new THREE.TextureLoader();
