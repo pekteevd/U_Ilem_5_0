@@ -26,6 +26,15 @@ const server=http.createServer(async(req,res)=>{
     try{
       const body=await readBody(req,5_000_000),state=JSON.parse(body);
       if(state?.schemaVersion!==1||!Array.isArray(state.objects)||!Array.isArray(state.tasks)||!state.economy)throw new Error("invalid_state_schema");
+      const incomingTime=Date.parse(state.meta?.lastSavedAt||"");
+      if(Number.isFinite(incomingTime)&&fs.existsSync(SAVE)){
+        try{
+          const current=JSON.parse(fs.readFileSync(SAVE,"utf8"));
+          const currentState=current.state||current;
+          const currentTime=Date.parse(currentState.meta?.lastSavedAt||"");
+          if(Number.isFinite(currentTime)&&incomingTime<currentTime)return send(res,409,JSON.stringify({error:"stale_save_rejected",savedAt:current.savedAt||currentState.meta.lastSavedAt}));
+        }catch(error){if(error.message==="stale_save_rejected")throw error;}
+      }
       const temp=SAVE+".tmp";fs.writeFileSync(temp,JSON.stringify({state,savedAt:new Date().toISOString()}),"utf8");
       if(fs.existsSync(SAVE))fs.copyFileSync(SAVE,SAVE+".bak");fs.renameSync(temp,SAVE);
       return send(res,200,JSON.stringify({ok:true,savedAt:new Date().toISOString()}));
