@@ -41,7 +41,7 @@ function renderTasks(){
 }
 function selectObject(id){selectedId=id;renderSelected();renderTab();}
 function renderTab(){
-  const titles={overview:["Обзор территории","состояние хозяйства"],construction:["Строительство","объекты и состояние"],warehouse:["Склад","остатки и минимальные запасы"],people:["Люди","команда и роли"],garden:["Сад","зелёная зона"],projects:["Проекты","инициативы пространства"],guests:["Гости и события","приём и календарь"],finance:["Финансы","бюджет и резерв"],chronicle:["Хроника","история изменений"]};
+  const titles={overview:["Обзор территории","состояние хозяйства"],construction:["Строительство","объекты и состояние"],warehouse:["Склад","остатки и минимальные запасы"],people:["Люди","команда и роли"],garden:["Сад","зелёная зона"],projects:["Проекты","инициативы пространства"],guests:["Гости и события","приём и календарь"],finance:["Финансы","бюджет и резерв"],chronicle:["Хроника","история изменений"],calendar:["Календарь","планирование по игровым дням"],territory:["Территория","участки и размещение"],engineering:["Инженерия","вода, электричество и отопление"],experts:["Специалисты","внешние специалисты и приглашения"]};
   $("tab-title").textContent=titles[activeTab][0];$("tab-caption").textContent=titles[activeTab][1];
   let html="";
   if(activeTab==="overview")html=`<div class="tab-summary"><div class="summary-chip"><b>${state.objects.length}</b><small>объектов на карте</small></div><div class="summary-chip"><b>${state.tasks.length}</b><small>задач в работе</small></div><div class="summary-chip"><b>${money(state.economy.budget)}</b><small>доступный бюджет</small></div><div class="summary-chip"><b>${state.warehouse.length}</b><small>категорий запасов</small></div></div><p>Выбери объект на карте или в списке. Все изменения сохраняются в общей модели мира.</p><div class="object-list">${state.objects.map(o=>`<button class="object-chip ${o.id===selectedId?"active":""}" data-select-object="${o.id}">${o.icon} ${esc(o.name)}</button>`).join("")}</div>`;
@@ -52,9 +52,16 @@ function renderTab(){
   if(activeTab==="projects")html='<p>Раздел проектов подготовлен как рабочее пространство для инициатив У Илем. Новые проекты интеллектуальный советник предлагает только по прямому запросу игрока.</p>';
   if(activeTab==="guests")html='<p>Календарь событий пока пуст. Гостевые сценарии и размещение будут подключены к общей модели задач и объектов.</p>';
   if(activeTab==="finance")html=`<div class="tab-summary"><div class="summary-chip"><b>${money(state.economy.budget)}</b><small>бюджет</small></div><div class="summary-chip"><b>${money(state.economy.reserve)}</b><small>неприкосновенный резерв</small></div></div><p>Финансовые операции пока не выполняются автоматически. Любые расходы в дальнейшем потребуют подтверждения игрока.</p>`;
+  if(activeTab==="calendar")html=`<div class="tab-summary"><div class="summary-chip"><b>День ${state.meta.day}</b><small>текущий игровой день</small></div><div class="summary-chip"><b>${esc(state.meta.season)}</b><small>сезон</small></div></div><div class="object-list"><button class="object-chip" id="calendar-next-day">Следующий день →</button><button class="object-chip" id="calendar-next-month">Завершить месяц →</button></div><p>Календарь показывает сроки задач. Переход времени не выполняет работы автоматически.</p>`;
+  if(activeTab==="territory")html=`<div class="object-list">${state.objects.map(o=>`<button class="object-chip" data-select-object="${o.id}">${o.icon} ${esc(o.name)} · ${esc(o.zone)}</button>`).join("")}</div><p>Участки и объекты территории. Размещение новых построек пока требует отдельной механики и подтверждения.</p>`;
+  if(activeTab==="engineering")html='<div class="tab-summary"><div class="summary-chip"><b>Электричество</b><small>Подключение есть, параметры требуют обследования</small></div><div class="summary-chip"><b>Вода</b><small>Колодец, насос и разводка требуют инвентаризации</small></div><div class="summary-chip"><b>Стоки</b><small>Локальные решения, состояние не оценено</small></div><div class="summary-chip"><b>Отопление</b><small>Индивидуально по зданиям</small></div></div>';
+  if(activeTab==="experts")html='<p>Каталог внешних специалистов: плотник, кровельщик, электрик, сантехник, агроном и специалисты по саду. Ставки и доступность не заданы, поэтому расходы не рассчитываются.</p>';
   if(activeTab==="chronicle")html=state.tasks.length?state.tasks.slice().reverse().map(t=>`<div class="summary-chip"><b>${esc(t.title)}</b><small>день ${t.dueDay} · ${esc(t.status)}</small></div>`).join(""):'<p>История хозяйственных событий пока пуста.</p>';
   $("tab-content").innerHTML=html;
   document.querySelectorAll("[data-select-object]").forEach(el=>el.addEventListener("click",()=>selectObject(el.dataset.selectObject)));
+  $("calendar-next-day")?.addEventListener("click",()=>{state.meta.day++;scheduleSave();renderHeader();renderTab();});
+  $("calendar-next-month")?.addEventListener("click",()=>{state.meta.day+=30;const seasons=["Весна","Лето","Осень","Зима"];const i=seasons.indexOf(state.meta.season);state.meta.season=seasons[(i+1)%4];scheduleSave();renderHeader();renderTab();});
+
 }
 function renderTabs(){
   document.querySelectorAll("[data-tab]").forEach(el=>el.classList.toggle("active",el.dataset.tab===activeTab));
@@ -94,9 +101,18 @@ async function checkOllama(){
 }
 async function init(){
   const loaded=await loadState();if(loaded.state)state=loaded.state;
+  // Preserve saved character data, but restore canonical team members missing from older saves.
+  const defaults=createInitialState().characters;
+  const saved=Array.isArray(state.characters)?state.characters:[];
+  state.characters=[...saved];
+  for(const person of defaults){if(!state.characters.some(x=>x.id===person.id))state.characters.push({...person});}
+
   renderHeader();renderTasks();renderSelected();renderTabs();
   $("local-status").textContent="готово";$("server-status").textContent=loaded.source==="server"?"загружено":"ожидание";
   await checkOllama();
+  // Ollama may be started after the game. Recheck periodically and recover without a page reload.
+  setInterval(checkOllama,12000);
+
   renderer=new WorldRenderer($("world-canvas"),$("world-viewport"),selectObject,()=>{});renderer.addObjects(state.objects);
   $("zoom-in").addEventListener("click",()=>renderer.zoomIn());$("zoom-out").addEventListener("click",()=>renderer.zoomOut());$("reset-view").addEventListener("click",()=>renderer.reset());
   $("add-task").addEventListener("click",()=>{$("task-title").focus();$("task-title").scrollIntoView({behavior:"smooth",block:"center"});});
