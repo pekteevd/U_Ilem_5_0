@@ -11,7 +11,18 @@ function selectedObject(){return state.objects.find(o=>o.id===selectedId)||null;
 function renderHeader(){
   $("game-day").textContent=state.meta.day+" · "+state.meta.season;
   $("budget").textContent=money(state.economy.budget);$("reserve").textContent=money(state.economy.reserve);
-  $("header-task-count").textContent=state.tasks.length;
+  $("header-task-count").textContent=state.tasks.filter(t=>t.status!=="done").length;
+  $("stock-count").textContent=state.warehouse.length+" категорий";
+  $("team-count").textContent=state.characters.length+" участника";
+  $("dateLine").textContent="День "+state.meta.day+" · "+state.meta.season;
+  $("weatherLabel").textContent=(state.meta.season==="Весна"?"🌱":state.meta.season==="Лето"?"☀":state.meta.season==="Осень"?"🍂":"❄")+" "+state.meta.season+" · сезонный режим";
+  $("seasonText").textContent=state.meta.season+" · сезонные работы и состояние территории";
+  $("weatherDetail").innerHTML='<div class="tile"><small>Текущий сезон</small><b>'+esc(state.meta.season)+'</b></div><p class="muted">Моделирование погоды и её влияния на работы ещё не подключено.</p>';
+}
+function renderCommunityAndLog(){
+  $("community").innerHTML=state.characters.map(c=>'<div class="row"><span>'+esc(c.name)+' · '+esc(c.role)+'</span><b>Энергия '+c.energy+'%</b></div>').join("")||'<div class="empty-state">Участники пока не добавлены.</div>';
+  const events=state.tasks.slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,8);
+  $("log").innerHTML=events.length?events.map(t=>'<div class="row">'+esc(t.title)+' · '+esc(t.status)+'</div>').join(""):'<div class="empty-state">Событий пока нет. Здесь появится история задач и изменений хозяйства.</div>';
 }
 function renderSelected(){
   const o=selectedObject();$("object-kind").textContent=o?o.zone:"не выбран";
@@ -20,6 +31,7 @@ function renderSelected(){
   $("task-hint").textContent=o?"Новая задача будет связана с объектом «"+o.name+"».":"Выбери объект на карте, чтобы связать задачу с ним. Ручное добавление не требует Ollama.";
 }
 function renderTasks(){
+  renderHeader();renderCommunityAndLog();
   $("task-count").textContent=state.tasks.length;
   $("header-task-count").textContent=state.tasks.length;
   if(!state.tasks.length){$("task-list").innerHTML='<div class="empty-state">Пока нет задач. Выбери объект и добавь первую.</div>';$("calendar-list").innerHTML='<div class="empty-state">Запланированные задачи появятся здесь.</div>';return;}
