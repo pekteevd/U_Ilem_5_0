@@ -36,7 +36,7 @@ page.on("response", response => {
 });
 
 try {
-  const response = await page.goto("http://127.0.0.1:4175", { waitUntil: "networkidle", timeout: 30000 });
+  const response = await page.goto("http://127.0.0.1:4175", { waitUntil: "domcontentloaded", timeout: 30000 });
   if (!response || !response.ok()) throw new Error("Главная страница не загрузилась: " + (response?.status() ?? "no response"));
 
   await page.waitForFunction(
