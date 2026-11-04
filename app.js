@@ -89,6 +89,7 @@ function processWarehouseForm(form){
     total=(after>=purchased?purchaseTotal:Math.round(purchaseTotal*after/purchased))-Math.round(purchaseTotal*before/purchased);
     if(!Number.isSafeInteger(total)||total<=0){toast("Сумма возврата меньше одного рубля. Объедини возврат с большей партией.");return;}
     const stock=Number(item.quantity);if(!Number.isFinite(stock)||stock<0){toast("Остаток материала повреждён. Возврат отменён.");return;}
+    if(qty>stock){toast("Нельзя вернуть больше материала, чем фактически осталось на складе.");return;}
     nextQuantity=Math.round((stock+qty)*100)/100;nextBudget=budget+total;
     if(!Number.isFinite(nextQuantity)||nextQuantity<stock||!Number.isSafeInteger(nextBudget)){toast("Возврат выводит остатки или бюджет за допустимый диапазон.");return;}
     transaction={id:"txn-"+crypto.randomUUID(),type:"income",description:"Возврат закупки: "+item.name,amount:total,createdAt:new Date().toISOString(),source:"warehouse-return",purchaseMovementId:purchase.id};
