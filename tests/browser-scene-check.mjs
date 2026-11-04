@@ -113,13 +113,15 @@ try {
     return { width: image.naturalWidth, height: image.naturalHeight };
   }, WORLD_MAP_CONFIG.file);
   const mapWidth = WORLD_MAP_CONFIG.worldWidth;
-  const mapHeight = mapWidth / (imageSize.width / imageSize.height);
+  const cameraHeight = 100, cameraDepth = 70;
+  const cameraLength = Math.hypot(cameraHeight, cameraDepth);
+  const cameraUpY = cameraDepth / cameraLength;
+  const cameraUpZ = -cameraHeight / cameraLength;
+  const projectedMapHeight = mapWidth / (imageSize.width / imageSize.height);
+  const mapHeight = projectedMapHeight / Math.abs(cameraUpZ);
   const cameraAspect = viewportRect.width / viewportRect.height;
-  const viewHeight = Math.max(mapHeight * 1.12, mapWidth / cameraAspect * 1.12);
+  const viewHeight = Math.max(mapHeight * Math.abs(cameraUpZ) * 1.12, mapWidth / cameraAspect * 1.12);
   const viewWidth = viewHeight * cameraAspect;
-  const cameraLength = Math.hypot(100, 36.4);
-  const cameraUpY = 36.4 / cameraLength;
-  const cameraUpZ = -100 / cameraLength;
 
   for (const object of WORLD_OBJECTS) {
     const worldX = (object.position.x - 0.5) * mapWidth;
