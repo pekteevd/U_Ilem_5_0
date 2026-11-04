@@ -1,0 +1,28 @@
+name: Import U Ilem 5.0 from legacy repository
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/import-u-ilem-5-0.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout new repository
+        uses: actions/checkout@v4
+      - name: Import only U_Ilem_5_0 directory
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/pekteevd/U_Ilem_4_0.git source
+          git -C source sparse-checkout set U_Ilem_5_0
+          cp -a source/U_Ilem_5_0/. .
+          rm -rf source .github/workflows/import-u-ilem-5-0.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Import U Ilem 5.0 as standalone project"
+          git push
