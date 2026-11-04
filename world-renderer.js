@@ -58,7 +58,7 @@ export class WorldRenderer{
     if(!Number.isFinite(u)||!Number.isFinite(v)||u<0||u>1||v<0||v>1)throw new RangeError("Позиция объекта должна быть нормализована в пределах карты 0..1.");
     return new THREE.Vector3((u-.5)*this.mapWidth,.04,(v-.5)*this.mapHeight);
   }
-  material(color,roughness=.88,transparent=false,opacity=1){return new THREE.MeshStandardMaterial({color,roughness,transparent,opacity});}
+  material(color,roughness=.88,transparent=false,opacity=1){return new THREE.MeshStandardMaterial({color,roughness,transparent,opacity,depthWrite:!transparent});}
   box(parent,w,h,d,mat,x=0,y=h/2,z=0){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);mesh.position.set(x,y,z);parent.add(mesh);return mesh;}
   roof(parent,w,h,d,color){const geo=new THREE.ConeGeometry(Math.sqrt(w*w+d*d)/1.35,h,4);const mesh=new THREE.Mesh(geo,this.material(color));mesh.rotation.y=Math.PI/4;mesh.position.y=h/2;parent.add(mesh);return mesh;}
   gableFace(parent,w,h,z,mat,y=0){
@@ -253,7 +253,10 @@ export class WorldRenderer{
       }
     }else if(o.type==="greenhouse"){
       this.box(group,w+.25,.2,d+.25,stone,0,.1,0);
-      this.box(group,w-.1,h*.52,d-.1,glass,0,h*.28,0);
+      this.box(group,w-.1,h*.52,.055,glass,0,h*.28,d*.49);
+      this.box(group,w-.1,h*.52,.055,glass,0,h*.28,-d*.49);
+      this.box(group,.055,h*.52,d-.1,glass,w*.49,h*.28,0);
+      this.box(group,.055,h*.52,d-.1,glass,-w*.49,h*.28,0);
       const frame=this.material(0x526b58),ridgeY=h*.88,halfW=w*.5,angle=Math.atan2(h*.36,halfW),slopeLen=Math.hypot(halfW,h*.36);
       for(let i=0;i<=4;i++){
         const x=-w*.48+i*w*.24;
