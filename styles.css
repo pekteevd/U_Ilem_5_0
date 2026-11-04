@@ -163,3 +163,5 @@ textarea{resize:vertical;min-height:48px}
 
 .stock-warning{display:block;margin-top:5px;color:#9a4b2d;font-size:11px;font-weight:700}
 .movement-row small{display:block;margin-top:3px;color:#76634b;font-size:11px;line-height:1.4}
+
+.building-components{margin-top:12px;padding-top:10px;border-top:1px solid #d3bd96;text-align:left}.building-components h3{margin:0 0 8px;font-size:14px}.building-part{padding:8px;margin:6px 0;background:#fff8e8;border:1px solid #d3bd96;border-radius:8px}.part-head{display:flex;justify-content:space-between;font:12px Arial,sans-serif}.part-track{height:7px;background:#e0d5c1;border-radius:8px;overflow:hidden;margin:6px 0}.part-track i{display:block;height:100%;background:#6d8a57}.part-track i.worn{background:#c18a3b}.part-track i.critical{background:#a34d3c}.building-part small{display:block;font:10px Arial,sans-serif;margin-bottom:6px}.part-repair{font:10px Arial,sans-serif;padding:5px 8px}
