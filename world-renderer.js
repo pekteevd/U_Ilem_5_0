@@ -13,7 +13,7 @@ export class WorldRenderer{
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;
     this.raycaster=new THREE.Raycaster();this.pointer=new THREE.Vector2();
     this.pickables=[];this.objectGroups=new Map();this.characterGroups=new Map();this.target=new THREE.Vector3(0,0,0);
-    this.drag=null;this.mapAspect=1;this.mapWidth=WORLD_MAP_CONFIG.worldWidth;this.mapHeight=this.mapWidth;this.mapReady=false;this.pendingObjects=[];this.pendingCharacters=null;this.flameEffects=[];
+    this.drag=null;this.cameraHeight=100;this.cameraDepth=70;this.cameraLength=Math.hypot(this.cameraHeight,this.cameraDepth);this.cameraUpY=this.cameraDepth/this.cameraLength;this.cameraUpZ=-this.cameraHeight/this.cameraLength;this.mapAspect=1;this.mapWidth=WORLD_MAP_CONFIG.worldWidth;this.mapHeight=this.mapWidth;this.mapReady=false;this.pendingObjects=[];this.pendingCharacters=null;this.flameEffects=[];
     this.addLights();this.loadMap();this.bindControls();this.resize();
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(viewport);
     this.animate=this.animate.bind(this);requestAnimationFrame(this.animate);
@@ -28,7 +28,7 @@ export class WorldRenderer{
     const loader=new THREE.TextureLoader();
     loader.load("./"+WORLD_MAP_CONFIG.file,texture=>{
       texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=Math.min(8,this.renderer.capabilities.getMaxAnisotropy());
-      const image=texture.image;this.mapAspect=image.width/image.height;this.mapHeight=this.mapWidth/this.mapAspect;
+      const image=texture.image;this.mapAspect=image.width/image.height;this.mapHeight=this.mapWidth/this.mapAspect/Math.abs(this.cameraUpZ);
       const geometry=new THREE.PlaneGeometry(this.mapWidth,this.mapHeight);
       const material=new THREE.MeshBasicMaterial({map:texture});
       const plane=new THREE.Mesh(geometry,material);plane.rotation.x=-Math.PI/2;plane.position.y=-.12;plane.receiveShadow=true;plane.userData.isMap=true;
@@ -49,15 +49,15 @@ export class WorldRenderer{
   }
   fitCamera(){
     const rect=this.viewport.getBoundingClientRect(),aspect=rect.width/Math.max(1,rect.height);
-    const visibleHeight=Math.max(this.mapHeight*1.12,this.mapWidth/aspect*1.12);
+    const visibleHeight=Math.max(this.mapHeight*Math.abs(this.cameraUpZ)*1.12,this.mapWidth/aspect*1.12);
     this.camera.left=-visibleHeight*aspect/2;this.camera.right=visibleHeight*aspect/2;
     this.camera.top=visibleHeight/2;this.camera.bottom=-visibleHeight/2;this.camera.zoom=1;
-    this.camera.position.set(this.target.x,100,this.target.z+36.4);this.camera.lookAt(this.target);this.camera.updateProjectionMatrix();
+    this.camera.position.set(this.target.x,this.cameraHeight,this.target.z+this.cameraDepth);this.camera.lookAt(this.target);this.camera.updateProjectionMatrix();
   }
   resize(){
     const w=Math.max(1,this.viewport.clientWidth),h=Math.max(1,this.viewport.clientHeight);
     this.renderer.setSize(w,h,false);
-    const aspect=w/h,viewH=Math.max(this.mapHeight*1.12,this.mapWidth/aspect*1.12);
+    const aspect=w/h,viewH=Math.max(this.mapHeight*Math.abs(this.cameraUpZ)*1.12,this.mapWidth/aspect*1.12);
     this.camera.left=-viewH*aspect/2;this.camera.right=viewH*aspect/2;this.camera.top=viewH/2;this.camera.bottom=-viewH/2;
     this.camera.updateProjectionMatrix();
   }
@@ -470,7 +470,7 @@ export class WorldRenderer{
     this.canvas.addEventListener("pointermove",e=>{
       if(!this.drag)return;const dx=e.clientX-this.drag.px,dy=e.clientY-this.drag.py;
       if(Math.abs(e.clientX-this.drag.x)+Math.abs(e.clientY-this.drag.y)>4)this.drag.moved=true;
-      if(this.drag.moved){const units=(this.camera.top-this.camera.bottom)/this.camera.zoom,scale=units/this.canvas.clientHeight;this.target.x-=dx*scale;this.target.z+=dy*scale;this.camera.position.set(this.target.x,100/this.camera.zoom,this.target.z+36.4/this.camera.zoom);this.camera.lookAt(this.target);}
+      if(this.drag.moved){const units=(this.camera.top-this.camera.bottom)/this.camera.zoom,scale=units/this.canvas.clientHeight;this.target.x-=dx*scale;this.target.z+=dy*scale/Math.abs(this.cameraUpZ);this.camera.position.set(this.target.x,this.cameraHeight/this.camera.zoom,this.target.z+this.cameraDepth/this.camera.zoom);this.camera.lookAt(this.target);}
       this.drag.px=e.clientX;this.drag.py=e.clientY;
     });
     this.canvas.addEventListener("pointerup",e=>{if(this.drag&&!this.drag.moved)this.pick(e);this.drag=null;});
@@ -482,7 +482,7 @@ export class WorldRenderer{
     this.raycaster.setFromCamera(this.pointer,this.camera);const hits=this.raycaster.intersectObjects(this.pickables,true);
     if(hits.length){const id=hits[0].object.userData.objectId;if(id)this.onSelect?.(id);}
   }
-  setZoom(value){this.camera.zoom=THREE.MathUtils.clamp(value,.65,2.8);this.camera.position.set(this.target.x,100/this.camera.zoom,this.target.z+36.4/this.camera.zoom);this.camera.lookAt(this.target);this.camera.updateProjectionMatrix();}
+  setZoom(value){this.camera.zoom=THREE.MathUtils.clamp(value,.65,2.8);this.camera.position.set(this.target.x,this.cameraHeight/this.camera.zoom,this.target.z+this.cameraDepth/this.camera.zoom);this.camera.lookAt(this.target);this.camera.updateProjectionMatrix();}
   zoomIn(){this.setZoom(this.camera.zoom*1.15)}zoomOut(){this.setZoom(this.camera.zoom/1.15)}
   reset(){this.target.set(0,0,0);this.fitCamera();}
   focusObject(id){const g=this.objectGroups.get(id);if(!g)return;this.target.set(g.position.x,0,g.position.z);this.camera.position.set(this.target.x,100/this.camera.zoom,this.target.z+36.4/this.camera.zoom);this.camera.lookAt(this.target);}
