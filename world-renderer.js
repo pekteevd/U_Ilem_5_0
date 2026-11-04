@@ -56,11 +56,12 @@ export class WorldRenderer{
   material(color,roughness=.88,transparent=false,opacity=1){return new THREE.MeshStandardMaterial({color,roughness,transparent,opacity});}
   box(parent,w,h,d,mat,x=0,y=h/2,z=0){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);mesh.position.set(x,y,z);parent.add(mesh);return mesh;}
   roof(parent,w,h,d,color){const geo=new THREE.ConeGeometry(Math.sqrt(w*w+d*d)/1.35,h,4);const mesh=new THREE.Mesh(geo,this.material(color));mesh.rotation.y=Math.PI/4;mesh.position.y=h/2;parent.add(mesh);return mesh;}
-  gableFace(parent,w,h,z,mat){
+  gableFace(parent,w,h,z,mat,y=0){
     const geo=new THREE.BufferGeometry();
     geo.setAttribute("position",new THREE.Float32BufferAttribute([-w/2,0,z,w/2,0,z,0,h,z],3));
     geo.setIndex([0,1,2]);geo.computeVertexNormals();
-    const face=new THREE.Mesh(geo,mat);parent.add(face);
+    const faceMat=mat.clone();faceMat.side=THREE.DoubleSide;
+    const face=new THREE.Mesh(geo,faceMat);face.position.y=y;parent.add(face);
     const back=face.clone();back.position.z=-2*z;parent.add(back);
   }
   buildHouse(group,o,wood,darkWood,roof,stone,glass,warm){
@@ -68,11 +69,11 @@ export class WorldRenderer{
     this.box(group,w+.45,baseH,d+.45,stone,0,baseH/2,0);
     this.box(group,w+.18,.12,d+.18,darkWood,0,baseH+.06,0);
     this.box(group,w,wallH,d,wood,0,baseH+wallH/2,0);
-    this.gableFace(group,w,wallH*.38,d/2+.006,wood);
-    this.gableFace(group,w,wallH*.38,-d/2-.006,wood);
+    this.gableFace(group,w,wallH*.38,d/2+.006,wood,eaveY);
+    this.gableFace(group,w,wallH*.38,-d/2-.006,wood,eaveY);
     const rise=wallH*.55,half=w*.57,slope=Math.atan2(rise,half),length=Math.sqrt(half*half+rise*rise);
-    const left=this.box(group,length,.2,d*1.18,roof,-w*.285,eaveY+rise/2,0);left.rotation.z=-slope;
-    const right=this.box(group,length,.2,d*1.18,roof,w*.285,eaveY+rise/2,0);right.rotation.z=slope;
+    const left=this.box(group,length,.2,d*1.18,roof,-w*.285,eaveY+rise/2,0);left.rotation.z=slope;
+    const right=this.box(group,length,.2,d*1.18,roof,w*.285,eaveY+rise/2,0);right.rotation.z=-slope;
     this.box(group,.18,.2,d*1.2,darkWood,0,eaveY+rise,0);
     for(const z of [-d*.25,d*.25]){
       const windowMat=this.material(0x8fa99d,.35);
